@@ -41,9 +41,7 @@ _Prerequisites_
  
 - Python 3.x
  
- 
- 
--React.js (for the frontend)
+- React.js
 
 
 

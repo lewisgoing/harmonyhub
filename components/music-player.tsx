@@ -59,56 +59,6 @@ export function MusicPlayer() {
   const [currentTime, setCurrentTime] = useState(0);
   const [audioInitialized, setAudioInitialized] = useState(false);
 
-  // Update audio routing when EQ is toggled
-  useEffect(() => {
-    if (audioInitialized) {
-      console.log("EQ state changed to:", isEQEnabled ? "enabled" : "disabled");
-      // When EQ state changes, directly update the gain values on existing filters
-      // rather than completely rebuilding the audio chain
-      if (isSplitEarMode) {
-        // Apply gain directly to left and right filters
-        if (leftFiltersRef.current.length > 0) {
-          const values = presetValues[leftEarPreset];
-          leftFiltersRef.current.forEach((filter, index) => {
-            if (filter && index < values.length) {
-              filter.gain.value = isEQEnabled ? values[index] : 0;
-              console.log(`Left filter ${index} gain set to:`, filter.gain.value);
-            }
-          });
-        }
-        
-        if (rightFiltersRef.current.length > 0) {
-          const values = presetValues[rightEarPreset];
-          rightFiltersRef.current.forEach((filter, index) => {
-            if (filter && index < values.length) {
-              filter.gain.value = isEQEnabled ? values[index] : 0;
-              console.log(`Right filter ${index} gain set to:`, filter.gain.value);
-            }
-          });
-        }
-      } else {
-        // Apply gain directly to unified filters
-        if (filtersRef.current.length > 0) {
-          const values = presetValues[unifiedPreset];
-          filtersRef.current.forEach((filter, index) => {
-            if (filter && index < values.length) {
-              filter.gain.value = isEQEnabled ? values[index] : 0;
-              console.log(`Unified filter ${index} gain set to:`, filter.gain.value);
-            }
-          });
-        }
-      }
-    }
-  }, [isEQEnabled]);
-
-  // Monitor mode changes to ensure proper audio routing
-  useEffect(() => {
-    if (audioInitialized) {
-      console.log("Mode changed to:", isSplitEarMode ? "split" : "unified");
-      updateAudioRouting();
-    }
-  }, [isSplitEarMode]);
-
   // Canvas ref for frequency response
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -125,6 +75,9 @@ export function MusicPlayer() {
   const rightFiltersRef = useRef<BiquadFilterNode[]>([]);
   const leftGainRef = useRef<GainNode | null>(null);
   const rightGainRef = useRef<GainNode | null>(null);
+
+  // Add requestAnimationFrame ID ref for cancellation
+  const animationFrameRef = useRef<number | null>(null);
 
   // Only load the audio file in the initial setup, don't create audio context yet
   useEffect(() => {
@@ -144,7 +97,7 @@ export function MusicPlayer() {
         setDuration(audioRef.current?.duration || 0);
       };
       
-      const errorHandler = (e) => {
+      const errorHandler = (e: Event) => {
         console.error("Audio element error:", e);
         alert("Error loading audio. Please check console for details.");
       };
@@ -168,6 +121,11 @@ export function MusicPlayer() {
         if (audioContextRef.current) {
           audioContextRef.current.close().catch(e => console.error("Error closing audio context:", e));
         }
+
+        // Cancel any pending animation frame
+        if (animationFrameRef.current !== null) {
+          cancelAnimationFrame(animationFrameRef.current);
+        }
       };
     }
   }, []);
@@ -190,6 +148,100 @@ export function MusicPlayer() {
       audio?.removeEventListener('timeupdate', updateTimeHandler);
     };
   }, []);
+
+  // Update the visualization when component mounts and whenever critical state changes
+  useEffect(() => {
+    // Ensure the canvas is properly sized on mount and window resize
+    const resizeCanvas = () => {
+      if (canvasRef.current) {
+        const canvas = canvasRef.current;
+        const container = canvas.parentElement;
+        if (container) {
+          canvas.width = container.clientWidth;
+          canvas.height = container.clientHeight;
+          // Update visualization after resize
+          updateFrequencyResponse();
+        }
+      }
+    };
+
+    // Set up initial canvas size
+    resizeCanvas();
+    
+    // Listen for window resize events
+    window.addEventListener('resize', resizeCanvas);
+    
+    // Initial visualization
+    updateFrequencyResponse();
+    
+    return () => {
+      window.removeEventListener('resize', resizeCanvas);
+      // Cancel any pending animation frame on unmount
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, [isEQEnabled, isSplitEarMode, unifiedPreset, leftEarPreset, rightEarPreset]);
+
+  // Update audio routing when EQ is toggled
+  useEffect(() => {
+    if (audioInitialized) {
+      console.log("EQ state changed to:", isEQEnabled ? "enabled" : "disabled");
+      
+      let updated = false;
+      
+      // When EQ state changes, directly update the gain values on existing filters
+      if (isSplitEarMode) {
+        // Apply gain directly to left and right filters
+        if (leftFiltersRef.current.length > 0) {
+          const values = presetValues[leftEarPreset];
+          leftFiltersRef.current.forEach((filter, index) => {
+            if (filter && index < values.length) {
+              filter.gain.value = isEQEnabled ? values[index] : 0;
+              console.log(`Left filter ${index} gain set to:`, filter.gain.value);
+              updated = true;
+            }
+          });
+        }
+        
+        if (rightFiltersRef.current.length > 0) {
+          const values = presetValues[rightEarPreset];
+          rightFiltersRef.current.forEach((filter, index) => {
+            if (filter && index < values.length) {
+              filter.gain.value = isEQEnabled ? values[index] : 0;
+              console.log(`Right filter ${index} gain set to:`, filter.gain.value);
+              updated = true;
+            }
+          });
+        }
+      } else {
+        // Apply gain directly to unified filters
+        if (filtersRef.current.length > 0) {
+          const values = presetValues[unifiedPreset];
+          filtersRef.current.forEach((filter, index) => {
+            if (filter && index < values.length) {
+              filter.gain.value = isEQEnabled ? values[index] : 0;
+              console.log(`Unified filter ${index} gain set to:`, filter.gain.value);
+              updated = true;
+            }
+          });
+        }
+      }
+      
+      // Update visualization immediately if we updated any filters
+      if (updated) {
+        updateFrequencyResponse();
+      }
+    }
+  }, [isEQEnabled, isSplitEarMode, leftEarPreset, rightEarPreset, unifiedPreset]);
+
+  // Monitor mode changes to ensure proper audio routing
+  useEffect(() => {
+    if (audioInitialized) {
+      console.log("Mode changed to:", isSplitEarMode ? "split" : "unified");
+      updateAudioRouting();
+    }
+  }, [isSplitEarMode]);
 
   // Handle seeking
   const handleSeek = (value: number[]) => {
@@ -280,10 +332,6 @@ export function MusicPlayer() {
       }
       
       console.log("Updating audio routing, mode:", isSplitEarMode ? "split" : "unified", "EQ enabled:", isEQEnabled);
-      
-      // Important: We'll still set up the same routing regardless of EQ being enabled/disabled
-      // The difference is whether the filter gain values are applied (in applyEQPreset function)
-      // This ensures easier toggling of EQ on/off without reconnecting everything
       
       // Define frequency bands
       const freqs = [100, 1000, 5000];
@@ -414,7 +462,7 @@ export function MusicPlayer() {
       }
       
       // Update the visualization
-      updateFrequencyResponse();
+      requestAnimationFrame(() => updateFrequencyResponse());
       
       return true;
     } catch (error) {
@@ -498,7 +546,7 @@ export function MusicPlayer() {
             });
           } catch (error) {
             console.error("Failed to load audio:", error);
-            alert("Failed to load audio: " + error.message);
+            alert("Failed to load audio: " + (error as Error).message);
             return;
           }
         }
@@ -527,7 +575,7 @@ export function MusicPlayer() {
   };
 
   // Toggle between unified and split ear modes with immediate effect
-  const toggleEarMode = async () => {
+  const toggleEarMode = () => {
     // Get current values
     const newSplitMode = !isSplitEarMode;
     console.log(`Switching to ${newSplitMode ? 'split' : 'unified'} mode`);
@@ -553,181 +601,59 @@ export function MusicPlayer() {
     // Update the mode state
     setIsSplitEarMode(newSplitMode);
     
-    // Immediately rebuild the audio graph
-    // This needs to happen after the state is updated but we can't wait for React's normal cycle
-    // So we force it with a minimal timeout
-    
-    // Use queueMicrotask to ensure this runs as soon as possible
-    queueMicrotask(async () => {
-      if (!audioInitialized || !audioContextRef.current) {
-        console.log("Audio not initialized, can't rebuild yet");
-        return;
-      }
+    // Immediate audio graph rebuild will be handled by the useEffect that watches isSplitEarMode
+  };
+
+  // Toggle EQ on/off with immediate visual update
+  const toggleEQ = () => {
+    setIsEQEnabled(prev => {
+      const newValue = !prev;
       
-      const context = audioContextRef.current;
-      const mediaSource = sourceRef.current;
-      
-      if (!mediaSource) {
-        console.log("No media source available");
-        return;
-      }
-      
-      console.log("Rebuilding audio routing for immediate mode switch");
-      
-      // Define frequency bands
-      const freqs = [100, 1000, 5000];
-      
-      if (newSplitMode) {
-        // SPLIT EAR MODE IMMEDIATE SETUP
-        console.log("Setting up split ear mode immediately");
-        
-        // Create splitter
-        const splitter = context.createChannelSplitter(2);
-        splitterRef.current = splitter;
-        
-        // Create merger
-        const merger = context.createChannelMerger(2);
-        mergerRef.current = merger;
-        
-        // Create gain nodes
-        const leftGain = context.createGain();
-        const rightGain = context.createGain();
-        leftGainRef.current = leftGain;
-        rightGainRef.current = rightGain;
-        
-        // Apply balance
-        leftGain.gain.value = balance <= 0.5 ? 1 : 1 - (balance - 0.5) * 2;
-        rightGain.gain.value = balance >= 0.5 ? 1 : balance * 2;
-        
-        // Determine the presets to use - if first time, use flat
-        const leftPreset = splitModeInitialized ? leftEarPreset : "flat";
-        const rightPreset = splitModeInitialized ? rightEarPreset : "flat";
-        
-        console.log("Using split presets:", leftPreset, rightPreset);
-        
-        // Create left filters with preset values directly applied
-        const leftFilterValues = presetValues[leftPreset];
-        const leftFilters = freqs.map((freq, index) => {
-          const filter = context.createBiquadFilter();
-          filter.type = "peaking";
-          filter.frequency.value = freq;
-          // Apply preset value or 0 if EQ is disabled
-          filter.gain.value = isEQEnabled ? leftFilterValues[index] : 0;
-          filter.Q.value = 1.0;
-          console.log(`Left filter ${index} created with gain:`, filter.gain.value);
-          return filter;
-        });
-        leftFiltersRef.current = leftFilters;
-        
-        // Create right filters with preset values directly applied
-        const rightFilterValues = presetValues[rightPreset];
-        const rightFilters = freqs.map((freq, index) => {
-          const filter = context.createBiquadFilter();
-          filter.type = "peaking";
-          filter.frequency.value = freq;
-          // Apply preset value or 0 if EQ is disabled
-          filter.gain.value = isEQEnabled ? rightFilterValues[index] : 0;
-          filter.Q.value = 1.0;
-          console.log(`Right filter ${index} created with gain:`, filter.gain.value);
-          return filter;
-        });
-        rightFiltersRef.current = rightFilters;
-        
-        // Connect everything in sequence
-        try {
-          mediaSource.connect(splitter);
-          
-          // Left channel
-          splitter.connect(leftFilters[0], 0);
-          leftFilters[0].connect(leftFilters[1]);
-          leftFilters[1].connect(leftFilters[2]);
-          leftFilters[2].connect(leftGain);
-          leftGain.connect(merger, 0, 0);
-          
-          // Right channel
-          splitter.connect(rightFilters[0], 1);
-          rightFilters[0].connect(rightFilters[1]);
-          rightFilters[1].connect(rightFilters[2]);
-          rightFilters[2].connect(rightGain);
-          rightGain.connect(merger, 0, 1);
-          
-          // Connect merger to destination
-          merger.connect(context.destination);
-          console.log("Split ear mode setup complete with immediate preset application");
-        } catch (e) {
-          console.error("Error connecting split mode audio nodes:", e);
+      // We can sync the visualization immediately instead of waiting for React to re-render
+      // This ensures the visualization updates right away
+      requestAnimationFrame(() => {
+        if (audioInitialized) {
+          // Apply EQ changes to audio nodes
+          if (isSplitEarMode) {
+            if (leftFiltersRef.current.length > 0) {
+              const leftValues = presetValues[leftEarPreset];
+              leftFiltersRef.current.forEach((filter, index) => {
+                if (filter && index < leftValues.length) {
+                  filter.gain.value = newValue ? leftValues[index] : 0;
+                }
+              });
+            }
+            
+            if (rightFiltersRef.current.length > 0) {
+              const rightValues = presetValues[rightEarPreset];
+              rightFiltersRef.current.forEach((filter, index) => {
+                if (filter && index < rightValues.length) {
+                  filter.gain.value = newValue ? rightValues[index] : 0;
+                }
+              });
+            }
+          } else {
+            if (filtersRef.current.length > 0) {
+              const values = presetValues[unifiedPreset];
+              filtersRef.current.forEach((filter, index) => {
+                if (filter && index < values.length) {
+                  filter.gain.value = newValue ? values[index] : 0;
+                }
+              });
+            }
+          }
         }
-      } else {
-        // UNIFIED MODE IMMEDIATE SETUP
-        console.log("Setting up unified mode immediately");
         
-        // Use current unified preset
-        const unifiedFilterValues = presetValues[unifiedPreset];
-        console.log("Using unified preset:", unifiedPreset);
-        
-        // Create filters with preset values directly applied
-        const filters = freqs.map((freq, index) => {
-          const filter = context.createBiquadFilter();
-          filter.type = "peaking";
-          filter.frequency.value = freq;
-          // Apply preset value or 0 if EQ is disabled
-          filter.gain.value = isEQEnabled ? unifiedFilterValues[index] : 0;
-          filter.Q.value = 1.0;
-          console.log(`Unified filter ${index} created with gain:`, filter.gain.value);
-          return filter;
-        });
-        filtersRef.current = filters;
-        
-        // Create splitter for balance control
-        const splitter = context.createChannelSplitter(2);
-        splitterRef.current = splitter;
-        
-        // Create merger
-        const merger = context.createChannelMerger(2);
-        mergerRef.current = merger;
-        
-        // Create gain nodes for balance
-        const leftGain = context.createGain();
-        const rightGain = context.createGain();
-        leftGainRef.current = leftGain;
-        rightGainRef.current = rightGain;
-        
-        // Apply balance
-        leftGain.gain.value = balance <= 0.5 ? 1 : 1 - (balance - 0.5) * 2;
-        rightGain.gain.value = balance >= 0.5 ? 1 : balance * 2;
-        
-        try {
-          // Connect nodes: Source -> Filters -> Splitter -> Gains -> Merger -> Destination
-          mediaSource.connect(filters[0]);
-          filters[0].connect(filters[1]);
-          filters[1].connect(filters[2]);
-          
-          // Split for balance control
-          filters[2].connect(splitter);
-          splitter.connect(leftGain, 0);
-          splitter.connect(rightGain, 1);
-          leftGain.connect(merger, 0, 0);
-          rightGain.connect(merger, 0, 1);
-          merger.connect(context.destination);
-          console.log("Unified mode setup complete with immediate preset application");
-        } catch (e) {
-          console.error("Error connecting unified mode audio nodes:", e);
-        }
-      }
+        // Update visualization immediately
+        updateFrequencyResponse(newValue);
+      });
+      
+      return newValue;
     });
   };
 
-  // Toggle EQ on/off
-  const toggleEQ = async () => {
-    setIsEQEnabled(prev => !prev);
-    
-    // No need to explicitly call updateAudioRouting here, 
-    // as the useEffect watching isEQEnabled will handle it
-    // We're keeping the preset values but just disabling their application
-  };
-
-  // Reset EQ to flat
-  const resetEQ = async () => {
+  // Reset EQ to flat with immediate visual update
+  const resetEQ = () => {
     console.log("Resetting EQ to flat");
     
     if (isSplitEarMode) {
@@ -757,6 +683,9 @@ export function MusicPlayer() {
           });
         }
       }
+      
+      // Update visualization immediately with new values
+      requestAnimationFrame(() => updateFrequencyResponse());
     } else {
       // Reset unified EQ
       setUnifiedPreset("flat");
@@ -771,24 +700,36 @@ export function MusicPlayer() {
           }
         });
       }
+      
+      // Update visualization immediately with new values
+      requestAnimationFrame(() => updateFrequencyResponse());
     }
   };
 
-  // Update balance
-  const updateBalance = async (newBalance: number[]) => {
-    setBalance(newBalance[0]);
+  // Update balance with immediate visual update
+  const updateBalance = (newBalance: number[]) => {
+    const balanceValue = newBalance[0];
+    setBalance(balanceValue);
+    
+    // Apply balance changes immediately to audio nodes
+    if (audioInitialized) {
+      if (leftGainRef.current && rightGainRef.current) {
+        leftGainRef.current.gain.value = balanceValue <= 0.5 ? 1 : 1 - (balanceValue - 0.5) * 2;
+        rightGainRef.current.gain.value = balanceValue >= 0.5 ? 1 : balanceValue * 2;
+      }
+    }
     
     // Update routing with a slight delay to ensure state is updated
-    setTimeout(async () => {
-      if (audioInitialized) {
-        await updateAudioRouting();
-      }
-    }, 0);
+    requestAnimationFrame(() => {
+      updateFrequencyResponse();
+    });
   };
 
-  // Apply preset to unified mode
-  const applyUnifiedPreset = async (preset: PresetType) => {
+  // Apply preset to unified mode with immediate visual feedback
+  const applyUnifiedPreset = (preset: PresetType) => {
     console.log("Setting unified preset to:", preset);
+    
+    // Update state
     setUnifiedPreset(preset);
     
     // Immediately apply to filters if in unified mode and audio is initialized
@@ -801,12 +742,17 @@ export function MusicPlayer() {
           console.log(`Unified filter ${index} gain set to:`, filter.gain.value);
         }
       });
+      
+      // Update visualization immediately without waiting for state update
+      requestAnimationFrame(() => updateFrequencyResponse());
     }
   };
 
-  // Apply preset to left ear only
-  const applyLeftEarPreset = async (preset: PresetType) => {
+  // Apply preset to left ear only with immediate visual feedback
+  const applyLeftEarPreset = (preset: PresetType) => {
     console.log("Setting left ear preset to:", preset);
+    
+    // Update state
     setLeftEarPreset(preset);
     
     // Immediately apply to filters if in split mode and audio is initialized
@@ -819,12 +765,17 @@ export function MusicPlayer() {
           console.log(`Left filter ${index} gain set to:`, filter.gain.value);
         }
       });
+      
+      // Update visualization immediately without waiting for state update
+      requestAnimationFrame(() => updateFrequencyResponse());
     }
   };
 
-  // Apply preset to right ear only
-  const applyRightEarPreset = async (preset: PresetType) => {
+  // Apply preset to right ear only with immediate visual feedback
+  const applyRightEarPreset = (preset: PresetType) => {
     console.log("Setting right ear preset to:", preset);
+    
+    // Update state
     setRightEarPreset(preset);
     
     // Immediately apply to filters if in split mode and audio is initialized
@@ -837,11 +788,15 @@ export function MusicPlayer() {
           console.log(`Right filter ${index} gain set to:`, filter.gain.value);
         }
       });
+      
+      // Update visualization immediately without waiting for state update
+      requestAnimationFrame(() => updateFrequencyResponse());
     }
   };
 
   // Calculate and update the frequency response curve
-  const updateFrequencyResponse = () => {
+  // Allow overriding the current EQ state for immediate updates
+  const updateFrequencyResponse = (eqEnabledOverride?: boolean) => {
     if (!canvasRef.current) {
       console.log("Cannot update visualization - canvas not available");
       return;
@@ -851,12 +806,15 @@ export function MusicPlayer() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     
+    // Use the override if provided, otherwise use current state
+    const effectiveEQEnabled = eqEnabledOverride !== undefined ? eqEnabledOverride : isEQEnabled;
+    
     console.log("Updating frequency response visualization", 
       isSplitEarMode ? "Split mode" : "Unified mode", 
       "Presets:", isSplitEarMode ? 
         `Left: ${leftEarPreset}, Right: ${rightEarPreset}` : 
         `Unified: ${unifiedPreset}`,
-      "EQ enabled:", isEQEnabled ? "yes" : "no");
+      "EQ enabled:", effectiveEQEnabled ? "yes" : "no");
     
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -919,21 +877,8 @@ export function MusicPlayer() {
     ctx.fillText('-15dB', 5, canvas.height - 15);
     
     // Draw EQ curve(s)
-    const drawEQCurve = (filters, color) => {
-      // Filters might be empty before audio is initialized, but we still want to show visualization
-      
-      // Determine which preset is active based on the current mode
-      let activePreset: PresetType;
-      if (isSplitEarMode) {
-        // Handle the case where filters array might be empty (before audio initialization)
-        activePreset = filters === leftFiltersRef.current ? leftEarPreset : 
-                      filters === rightFiltersRef.current ? rightEarPreset : 
-                      "flat"; // Default if can't determine
-      } else {
-        activePreset = unifiedPreset;
-      }
-      
-      // Get preset values for visualization (not necessarily the current filter gain values)
+    const drawEQCurve = (activePreset: PresetType, color: string) => {
+      // Get preset values for visualization
       const presetGains = presetValues[activePreset];
       
       // Set up curve style
@@ -941,7 +886,7 @@ export function MusicPlayer() {
       ctx.lineWidth = 3;
       
       // If EQ is disabled, reduce opacity
-      if (!isEQEnabled) {
+      if (!effectiveEQEnabled) {
         ctx.globalAlpha = 0.4; // 40% opacity when disabled
       } else {
         ctx.globalAlpha = 1.0; // Full opacity when enabled
@@ -1008,9 +953,9 @@ export function MusicPlayer() {
     // Draw curves based on current mode
     if (isSplitEarMode) {
       // Use red and blue for split mode
-      // Always draw the curves, even if filters are not yet initialized
-      drawEQCurve(leftFiltersRef.current, '#3b82f6'); // Blue for left
-      drawEQCurve(rightFiltersRef.current, '#ef4444'); // Red for right
+      // Always draw the curves based on current state
+      drawEQCurve(leftEarPreset, '#3b82f6'); // Blue for left
+      drawEQCurve(rightEarPreset, '#ef4444'); // Red for right
       
       // Add a legend
       ctx.font = '12px system-ui';
@@ -1020,9 +965,12 @@ export function MusicPlayer() {
       ctx.fillText('Right', canvas.width - 60, 40);
     } else {
       // Use dark orange for unified mode
-      // Always draw the curve, even if filters are not yet initialized
-      drawEQCurve(filtersRef.current, '#dd6b20'); // Dark orange for unified
+      // Always draw the curve based on current state
+      drawEQCurve(unifiedPreset, '#dd6b20'); // Dark orange for unified
     }
+    
+    // Store the animation frame ID for possible cancellation
+    animationFrameRef.current = null;
   };
 
   const PresetButton = ({ 
@@ -1100,8 +1048,19 @@ export function MusicPlayer() {
       />
     </div>
   );
-
-  // The rest of your component code...
+  
+  // Initialize the canvas when component mounts
+  useEffect(() => {
+    if (canvasRef.current) {
+      const canvas = canvasRef.current;
+      const container = canvas.parentElement;
+      if (container) {
+        canvas.width = container.clientWidth;
+        canvas.height = container.clientHeight;
+        updateFrequencyResponse();
+      }
+    }
+  }, []);
   
   return (
     <Card className="w-[400px] overflow-hidden bg-white rounded-xl shadow-lg">

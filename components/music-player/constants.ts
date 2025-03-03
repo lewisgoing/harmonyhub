@@ -156,8 +156,8 @@ export const CALIBRATION_STEPS = [
  * Demo song data
  */
 export const DEMO_SONG: Song = {
-  name: "They Say It's Wonderful",
-  author: "John Coltrane and Johnny Hartman",
+  name: "Elephants Dream",
+  author: "The Wires",
   cover: "https://i.scdn.co/image/ab67616d0000b2731d1cc2e40d533d7bcebf5dae",
   audio: "https://storage.googleapis.com/media-session/elephants-dream/the-wires.mp3", // Original Google API URL
 };

@@ -17,6 +17,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { SplitEarConfig } from './types';
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { Label } from '../ui/label';
 
 interface EQControlsProps {
   // EQ state
@@ -25,6 +26,14 @@ interface EQControlsProps {
   splitEarConfig: SplitEarConfig;
   leftEarEnabled?: boolean;
   rightEarEnabled?: boolean;
+  maxGainRange: 12 | 24 | 36;
+  maxQValue: 10 | 20 | 30;
+  onMaxGainRangeChange: (value: 12 | 24 | 36) => void;
+  onMaxQValueChange: (value: 10 | 20 | 30) => void;
+  
+  // Visualization settings
+  dbRange?: number;
+  onDbRangeChange?: (value: number) => void;
   
   // Callbacks
   onEQToggle: () => void;
@@ -53,6 +62,8 @@ const EQControls: React.FC<EQControlsProps> = ({
   splitEarConfig,
   leftEarEnabled = true,
   rightEarEnabled = true,
+  dbRange = 24,
+  onDbRangeChange,
   onEQToggle,
   onSplitEarToggle,
   onLeftEarToggle,
@@ -60,6 +71,10 @@ const EQControls: React.FC<EQControlsProps> = ({
   onBalanceChange,
   onResetEQ,
   onSavePreset,
+  maxGainRange,
+  maxQValue,
+  onMaxGainRangeChange,
+  onMaxQValueChange,
   activeTab = 'eq',
   onTabChange,
   showCalibration = true,
@@ -98,25 +113,6 @@ const EQControls: React.FC<EQControlsProps> = ({
             </div>
             
             <div className="flex items-center space-x-2">
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      onClick={onSavePreset}
-                      className="h-8 text-xs"
-                    >
-                      <Save className="h-3 w-3 mr-1" />
-                      Save
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p className="text-xs">Save current EQ as preset</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              
               <Button 
                 variant="outline" 
                 size="sm"
@@ -203,41 +199,84 @@ const EQControls: React.FC<EQControlsProps> = ({
         </TabsContent>
         
         <TabsContent value="settings" className="space-y-4">
-          {/* Mode settings */}
-          <div className="space-y-3">
-            <h3 className="text-sm font-medium">Audio Mode</h3>
-            <div className="grid grid-cols-2 gap-2">
-              <Button
-                variant={isSplitEarMode ? "outline" : "secondary"}
-                size="sm"
-                onClick={() => !isSplitEarMode || onSplitEarToggle()}
-                className="justify-start"
-              >
-                <Ear className="h-4 w-4 mr-2" />
-                <div className="text-left">
-                  <div className="font-medium">Unified</div>
-                  <div className="text-xs opacity-70">Same EQ for both ears</div>
-                </div>
-              </Button>
-              
-              <Button
-                variant={isSplitEarMode ? "secondary" : "outline"}
-                size="sm"
-                onClick={() => isSplitEarMode || onSplitEarToggle()}
-                className="justify-start"
-              >
-                <div className="relative mr-2">
-                  <Ear className="h-4 w-4" />
-                  <Ear className="h-4 w-4 absolute top-0.5 left-0.5 opacity-30" />
-                </div>
-                <div className="text-left">
-                  <div className="font-medium">Split Ear</div>
-                  <div className="text-xs opacity-70">Separate EQ per ear</div>
-                </div>
-              </Button>
-            </div>
-          </div>
-          
+  {/* Mode settings */}
+  <div className="space-y-3">
+    <h3 className="text-sm font-medium">Audio Mode</h3>
+    <div className="grid grid-cols-2 gap-2">
+      {/* existing mode buttons */}
+    </div>
+  </div>
+  
+  {/* Add gain range settings */}
+  <div className="space-y-3">
+    <h3 className="text-sm font-medium">EQ Settings</h3>
+    
+    <div className="space-y-2">
+      <Label>Gain Range (±dB)</Label>
+      <div className="grid grid-cols-3 gap-2">
+        <Button 
+          variant={maxGainRange === 12 ? "default" : "outline"}
+          size="sm" 
+          className="text-xs" 
+          onClick={() => setMaxGainRange(12)}
+        >
+          ±12 dB
+        </Button>
+        <Button 
+          variant={maxGainRange === 24 ? "default" : "outline"}
+          size="sm" 
+          className="text-xs" 
+          onClick={() => setMaxGainRange(24)}
+        >
+          ±24 dB
+        </Button>
+        <Button 
+          variant={maxGainRange === 36 ? "default" : "outline"}
+          size="sm" 
+          className="text-xs" 
+          onClick={() => setMaxGainRange(36)}
+        >
+          ±36 dB
+        </Button>
+      </div>
+      <p className="text-xs text-muted-foreground mt-1">
+        Higher ranges allow more dramatic EQ adjustments
+      </p>
+    </div>
+    
+    <div className="space-y-2">
+      <Label>Max Q Value</Label>
+      <div className="grid grid-cols-3 gap-2">
+        <Button 
+          variant={maxQValue === 10 ? "default" : "outline"}
+          size="sm" 
+          className="text-xs" 
+          onClick={() => setMaxQValue(10)}
+        >
+          10
+        </Button>
+        <Button 
+          variant={maxQValue === 20 ? "default" : "outline"}
+          size="sm" 
+          className="text-xs" 
+          onClick={() => setMaxQValue(20)}
+        >
+          20
+        </Button>
+        <Button 
+          variant={maxQValue === 30 ? "default" : "outline"}
+          size="sm" 
+          className="text-xs" 
+          onClick={() => setMaxQValue(30)}
+        >
+          30
+        </Button>
+      </div>
+      <p className="text-xs text-muted-foreground mt-1">
+        Higher Q values create narrower, more precise filters
+      </p>
+    </div>
+  </div>
           {/* Info about EQ */}
           <div className="p-4 bg-gray-50 rounded-md">
             <h3 className="text-sm font-medium mb-2">About This App</h3>

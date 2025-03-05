@@ -12,6 +12,12 @@ body {
   }
 }
 
+.shadcn-tooltip-content {
+  z-index: 50 !important;
+  max-width: 300px;
+  white-space: normal;
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;

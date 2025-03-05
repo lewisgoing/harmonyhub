@@ -63,8 +63,8 @@ export function useEQPresets(): UseEQPresetsReturn {
       }
     }
   }, []);
-
-  // Load cloud presets when user is authenticated
+  
+  // Second, ensure we only overwrite local presets with cloud ones if the user is logged in
   useEffect(() => {
     const loadCloudPresets = async () => {
       // Skip if already loading, no user, or too many attempts
@@ -131,7 +131,7 @@ export function useEQPresets(): UseEQPresetsReturn {
       // When logged out, reset loading attempts
       loadAttempts.current = 0;
       
-      // When logged out, only show local presets, not cloud presets
+      // When logged out, ALWAYS show local presets, not cloud presets
       try {
         const savedPresetsJSON = localStorage.getItem(STORAGE_KEYS.USER_PRESETS);
         if (savedPresetsJSON) {
@@ -142,7 +142,7 @@ export function useEQPresets(): UseEQPresetsReturn {
         console.error('Failed to load local user presets:', error);
       }
     }
-  }, [user]);
+  }, [user, toast]);
 
   /**
    * Save a user preset to both local storage and cloud if logged in
@@ -259,7 +259,8 @@ export function useEQPresets(): UseEQPresetsReturn {
   const createCustomPreset = (
     name: string,
     bands: FrequencyBand[] = [...DEFAULT_FREQUENCY_BANDS],
-    tinnitusCenterFreq?: number
+    tinnitusCenterFreq?: number,
+    description: string = 'Custom user preset'
   ): UserPreset => {
     // Generate a unique ID that includes a timestamp AND a random string
     // to ensure no duplicates even if created at the exact same millisecond
@@ -269,7 +270,7 @@ export function useEQPresets(): UseEQPresetsReturn {
     const newPreset: UserPreset = {
       id,
       name,
-      description: 'Custom user preset',
+      description,
       color: {
         active: { bg: "#0EA5E9", text: "white" },
         inactive: { bg: "#E0F2FE", text: "#0369A1" }

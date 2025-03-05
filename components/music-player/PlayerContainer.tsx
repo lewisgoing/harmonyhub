@@ -10,7 +10,9 @@ import {
   Save, 
   PlusCircle, 
   Settings,
-  X
+  X,
+  Headphones,
+  Trash2
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { Input } from '@/components/ui/input';
@@ -47,6 +49,7 @@ import { DEMO_SONG, DEFAULT_FREQUENCY_BANDS, STORAGE_KEYS } from './constants';
 // Utils for player controls
 import { createAudioElementControls } from '@/utils/playerControls';
 import { useToast } from '../ui/use-toast';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 
 /**
 * Main Music Player Container Component
@@ -85,6 +88,8 @@ const PlayerContainer: React.FC = () => {
     balance: 0.5
   });
 
+  
+
   // Frequency bands for EQ
   const [unifiedBands, setUnifiedBands] = useState<FrequencyBand[]>([...DEFAULT_FREQUENCY_BANDS]);
   const [leftEarBands, setLeftEarBands] = useState<FrequencyBand[]>([...DEFAULT_FREQUENCY_BANDS]);
@@ -92,10 +97,30 @@ const PlayerContainer: React.FC = () => {
 
   // Calibration state
   const [isCalibrationOpen, setIsCalibrationOpen] = useState(false);
+  const [newPresetDescription, setNewPresetDescription] = useState('Custom user preset');
   
   // External audio state
   const [isUrlInputOpen, setIsUrlInputOpen] = useState(false);
   const [currentSong, setCurrentSong] = useState<Song>(DEMO_SONG);
+
+  const [activeSaveSource, setActiveSaveSource] = useState<'left' | 'right' | 'unified' | null>(null);
+
+  const handleSaveLeftEarEQ = () => {
+    setActiveSaveSource('left');
+    setNewPresetName(`Left Ear EQ ${new Date().toLocaleDateString()}`);
+    setNewPresetDescription(`Custom left ear EQ settings`);
+    setShowSavePresetDialog(true);
+  };
+  
+  const handleSaveRightEarEQ = () => {
+    setActiveSaveSource('right');
+    setNewPresetName(`Right Ear EQ ${new Date().toLocaleDateString()}`);
+    setNewPresetDescription(`Custom right ear EQ settings`);
+    setShowSavePresetDialog(true);
+  };
+  
+  // Modify the original method
+
   
   // Audio context state
   const { 
@@ -305,31 +330,31 @@ const PlayerContainer: React.FC = () => {
 
   // Update audio engine when EQ settings change
   useEffect(() => {
-    if (!audioEngine) return;
-    
-    // Update EQ enabled state
-    audioEngine.setEQEnabled(isEQEnabled);
-    
-    // Update split ear mode
-    audioEngine.setSplitEarMode(isSplitEarMode);
-    
-    // Update EQ bands
-    audioEngine.setUnifiedBands(unifiedBands);
-    audioEngine.setLeftEarBands(leftEarBands);
-    audioEngine.setRightEarBands(rightEarBands);
-    
-    // Update balance
-    audioEngine.setBalance(splitEarConfig.balance);
-    
-    // Update individual ear EQ states if in split mode
-    if (isSplitEarMode) {
-      audioEngine.setLeftEarEnabled(leftEQEnabled);
-      audioEngine.setRightEarEnabled(rightEQEnabled);
+    if (audioEngine) {
+      // Update EQ enabled state
+      audioEngine.setEQEnabled(isEQEnabled);
+      
+      // Update split ear mode
+      audioEngine.setSplitEarMode(isSplitEarMode);
+      
+      // Update EQ bands
+      audioEngine.setUnifiedBands(unifiedBands);
+      audioEngine.setLeftEarBands(leftEarBands);
+      audioEngine.setRightEarBands(rightEarBands);
+      
+      // Update balance
+      audioEngine.setBalance(splitEarConfig.balance);
+      
+      // Update individual ear EQ states if in split mode
+      if (isSplitEarMode) {
+        audioEngine.setLeftEarEnabled(leftEQEnabled);
+        audioEngine.setRightEarEnabled(rightEQEnabled);
+      }
+      
+      // Force calculation of frequency response data for visualization
+      const responseData = audioEngine.getFrequencyResponse();
+      setFrequencyResponseData(responseData);
     }
-    
-    // Update frequency response data for visualization
-    const responseData = audioEngine.getFrequencyResponse();
-    setFrequencyResponseData(responseData);
   }, [
     audioEngine, 
     isEQEnabled, 
@@ -341,6 +366,14 @@ const PlayerContainer: React.FC = () => {
     leftEQEnabled,
     rightEQEnabled
   ]);
+
+  useEffect(() => {
+    if (audioEngine && !frequencyResponseData) {
+      // Initial calculation of frequency response
+      const responseData = audioEngine.getFrequencyResponse();
+      setFrequencyResponseData(responseData);
+    }
+  }, [audioEngine]);
 
   /**
    * Toggle EQ on/off
@@ -405,11 +438,16 @@ const PlayerContainer: React.FC = () => {
     setUnifiedBands([...preset.bands]);
     
     if (audioEngine) {
-      audioEngine.applyUnifiedPreset(preset);
-      
-      // Update frequency response data
-      const responseData = audioEngine.getFrequencyResponse();
-      setFrequencyResponseData(responseData);
+      // Apply the preset with a slight delay to batch multiple changes together
+      requestAnimationFrame(() => {
+        audioEngine.applyUnifiedPreset(preset);
+        
+        // Update frequency response data with a slight delay
+        setTimeout(() => {
+          const responseData = audioEngine.getFrequencyResponse();
+          setFrequencyResponseData(responseData);
+        }, 100); // Small delay to allow audio ramps to complete
+      });
     }
   };
 
@@ -527,12 +565,10 @@ const handleBandChange = (
    * Handle saving the current EQ settings as a new custom preset
    */
   const handleSaveCurrentEQ = () => {
-    // Open the save preset dialog
+    setActiveSaveSource('unified');
+    setNewPresetName(`Custom EQ ${new Date().toLocaleDateString()}`);
+    setNewPresetDescription(`Custom unified EQ settings`);
     setShowSavePresetDialog(true);
-    
-    // Set default name for the preset
-    const now = new Date();
-    setNewPresetName(`Custom EQ ${now.toLocaleDateString()} ${now.toLocaleTimeString().slice(0, 5)}`);
   };
   
   /**
@@ -540,18 +576,31 @@ const handleBandChange = (
    */
   const saveCurrentPresetAsNew = async () => {
     try {
-      const bandsToSave = isSplitEarMode ? 
-        [...leftEarBands] : // In split mode, we'll just use the left ear bands for now
+      // Determine which ear's bands to save based on the active save source
+      const bandsToSave = activeSaveSource === 'right' && isSplitEarMode ? 
+        [...rightEarBands] : 
+        activeSaveSource === 'left' && isSplitEarMode ?
+        [...leftEarBands] :
         [...unifiedBands];
       
       // Create the new preset
-      const newPreset = createCustomPreset(newPresetName, bandsToSave);
+      const newPreset = createCustomPreset(
+        newPresetName, 
+        bandsToSave,
+        undefined, // tinnitusFreq (leave undefined unless from calibration)
+        newPresetDescription // Use the description from the input
+      );
       
       // Close the dialog
       setShowSavePresetDialog(false);
       
-      // Apply the new preset
-      if (isSplitEarMode) {
+      // Reset the active save source
+      setActiveSaveSource(null);
+      
+      // Apply the new preset to the appropriate channel
+      if (activeSaveSource === 'right' && isSplitEarMode) {
+        handleRightEarPresetSelect(newPreset);
+      } else if (activeSaveSource === 'left' && isSplitEarMode) {
         handleLeftEarPresetSelect(newPreset);
       } else {
         handleUnifiedPresetSelect(newPreset);
@@ -570,34 +619,43 @@ const handleBandChange = (
       });
     }
   };
-
   /**
    * Handle calibration completion
    */
-  const handleCalibrationComplete = async (preset: UserPreset) => {
-    try {
-      // Always save locally first
-      saveUserPreset(preset);
-      
-      // Apply the preset
-      handleUnifiedPresetSelect(preset);
-      
-      toast({
-        title: "Calibration Complete",
-        description: `Your custom preset "${preset.name}" has been created and applied.`,
-      });
-    } catch (error) {
-      console.error('Failed to save preset locally:', error);
-      toast({
-        title: "Error saving preset",
-        description: "There was an error saving your preset. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      // Close the calibration dialog
-      setIsCalibrationOpen(false);
+// In components/music-player/PlayerContainer.tsx
+const handleCalibrationComplete = async (preset: UserPreset) => {
+  try {
+    // Always save locally first
+    await saveUserPreset(preset);
+    
+    // Apply the preset to unified mode (regardless of current mode)
+    // This ensures calibration always applies to a new unified preset
+    if (isSplitEarMode) {
+      // Temporarily switch to unified mode to apply the calibrated preset
+      setIsSplitEarMode(false);
     }
-  };
+    
+    // Apply the preset to unified mode
+    handleUnifiedPresetSelect(preset);
+    
+    toast({
+      title: "Calibration Complete",
+      description: `Your personalized tinnitus relief preset has been created and applied. It's designed specifically for your ${preset.tinnitusCenterFreq && preset.tinnitusCenterFreq >= 1000 ? 
+        `${(preset.tinnitusCenterFreq/1000).toFixed(1)}kHz` : 
+        `${preset.tinnitusCenterFreq?.toFixed(0)}Hz`} tinnitus frequency.`,
+    });
+  } catch (error) {
+    console.error('Failed to save preset locally:', error);
+    toast({
+      title: "Error saving preset",
+      description: "There was an error saving your preset. Please try again.",
+      variant: "destructive",
+    });
+  } finally {
+    // Close the calibration dialog
+    setIsCalibrationOpen(false);
+  }
+};
 
   /**
    * Handle preset deletion
@@ -791,22 +849,22 @@ const handleBandChange = (
             
             {/* Save preset button */}
             <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button 
-                    size="icon" 
-                    variant="ghost" 
-                    className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/20 text-white hover:bg-black/30"
-                    onClick={handleSaveCurrentEQ}
-                  >
-                    <Save size={14} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Save current EQ as preset</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+  <Tooltip>
+    <TooltipTrigger asChild>
+      <Button 
+        size="icon" 
+        variant="ghost" 
+        className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/20 text-white hover:bg-black/30"
+        onClick={handleSaveCurrentEQ}
+      >
+        <Save size={14} />
+      </Button>
+    </TooltipTrigger>
+    <TooltipContent>
+      <p>Save current EQ as preset</p>
+    </TooltipContent>
+  </Tooltip>
+</TooltipProvider>
           </div>
           
           {/* EQ controls */}
@@ -831,52 +889,256 @@ const handleBandChange = (
           
           {/* Presets */}
           {activeTab === 'eq' && (
-            <div className="mt-4 pt-2 border-t border-gray-100">
-              {/* Cloud status indicator */}
-              <div className="flex justify-between items-center mb-3">
-                <h3 className="text-sm font-medium">Presets</h3>
-                <CloudStatus />
-              </div>
+  <div className="mt-4 pt-2 border-t border-gray-100">
+    {/* Cloud status indicator */}
+    <div className="flex justify-between items-center mb-3">
+      <h3 className="text-sm font-medium">Presets</h3>
+      <CloudStatus />
+    </div>
+    
+    {/* Cloud promotion for non-logged in users */}
+    {!user && Object.keys(userPresets).length > 0 && (
+      <CloudPromotion trigger="presets" />
+    )}
+    
+    {isLoadingPresets ? (
+      <div className="py-2">
+        <p className="text-sm text-center text-muted-foreground">
+          Loading presets...
+        </p>
+      </div>
+    ) : isSplitEarMode ? (
+      <SplitEarControls 
+        builtInPresets={presets}
+        userPresets={userPresets}
+        splitEarConfig={splitEarConfig}
+        onLeftEarPresetSelect={handleLeftEarPresetSelect}
+        onRightEarPresetSelect={handleRightEarPresetSelect}
+        onDeletePreset={handleDeletePreset}
+        onSaveLeftEarPreset={handleSaveLeftEarEQ}
+        onSaveRightEarPreset={handleSaveRightEarEQ}
+        showUserPresets={true}
+        showDeleteButton={true}
+        isEQEnabled={isEQEnabled}
+        leftEarEnabled={leftEQEnabled}
+        rightEarEnabled={rightEQEnabled}
+      />
+    ) : (
+      <div>
+        <Tabs defaultValue="standard">
+          <TabsList className="grid grid-cols-3 mb-3">
+            <TabsTrigger value="standard" className="text-xs">Standard</TabsTrigger>
+            <TabsTrigger value="tinnitus" className="text-xs flex items-center gap-1">
+              <Headphones className="h-3 w-3" />
+              Tinnitus
+            </TabsTrigger>
+            <TabsTrigger value="custom" className="text-xs">Custom</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="standard">
+            <div className="grid grid-cols-2 gap-2">
+              {Object.values(presets).map((preset) => {
+                const isActive = unifiedPresetId === preset.id;
+                const style = preset.color;
+                
+                return (
+                  <TooltipProvider key={preset.id}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          className="text-sm font-medium rounded-md shadow-sm transition-colors w-full h-auto py-2 justify-start"
+                          style={{
+                            backgroundColor: isActive ? style.active.bg : style.inactive.bg,
+                            color: isActive ? style.active.text : style.inactive.text,
+                            border: "none",
+                          }}
+                          onClick={() => handleUnifiedPresetSelect(preset)}
+                        >
+                          <div className="flex flex-col items-start">
+                            <span className="font-medium">{preset.name}</span>
+                            <span className="text-xs opacity-70">
+                              {preset.description.slice(0, 18)}{preset.description.length > 18 ? '...' : ''}
+                            </span>
+                          </div>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">
+                        <p>{preset.description}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                );
+              })}
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="tinnitus">
+            <div className="grid grid-cols-2 gap-2">
+              {Object.values(userPresets)
+                .filter(preset => preset.isCalibrated)
+                .map((preset) => {
+                  const isActive = unifiedPresetId === preset.id;
+                  const style = preset.color;
+                  
+                  return (
+                    <TooltipProvider key={preset.id}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            className="text-sm font-medium rounded-md shadow-sm transition-colors w-full h-auto py-2 justify-start"
+                            style={{
+                              backgroundColor: isActive ? style.active.bg : style.inactive.bg,
+                              color: isActive ? style.active.text : style.inactive.text,
+                              border: "none",
+                            }}
+                            onClick={() => handleUnifiedPresetSelect(preset)}
+                          >
+                            <div className="flex flex-col items-start">
+                              <span className="font-medium">{preset.name}</span>
+                              {preset.tinnitusCenterFreq && (
+                                <span className="text-xs opacity-70">
+                                  {preset.tinnitusCenterFreq >= 1000 ? 
+                                    `${(preset.tinnitusCenterFreq/1000).toFixed(1)}kHz` : 
+                                    `${preset.tinnitusCenterFreq.toFixed(0)}Hz`}
+                                </span>
+                              )}
+                            </div>
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="right">
+                          <div className="space-y-1 max-w-xs">
+                            <p className="font-medium">{preset.name}</p>
+                            <p className="text-xs">{preset.description}</p>
+                            {preset.tinnitusCenterFreq && (
+                              <p className="text-xs">
+                                Calibrated for tinnitus at {preset.tinnitusCenterFreq.toFixed(0)}Hz
+                              </p>
+                            )}
+                          </div>
+                        </TooltipContent>
+                      </Tooltip>
+                      
+                      {/* Delete button */}
+                      <div className="absolute -right-2 -top-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 rounded-full bg-white shadow border border-gray-200"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeletePreset(preset.id);
+                          }}
+                        >
+                          <Trash2 className="h-3 w-3 text-red-500" />
+                        </Button>
+                      </div>
+                    </TooltipProvider>
+                  );
+                })}
               
-              {/* Cloud promotion for non-logged in users */}
-              {!user && Object.keys(userPresets).length > 0 && (
-                <CloudPromotion trigger="presets" />
-              )}
-              
-              {isLoadingPresets ? (
-                <div className="py-2">
-                  <p className="text-sm text-center text-muted-foreground">
-                    Loading presets...
+              {Object.values(userPresets).filter(preset => preset.isCalibrated).length === 0 && (
+                <div className="col-span-2 p-4 text-center text-muted-foreground bg-purple-50 rounded-md">
+                  <Headphones className="h-5 w-5 mx-auto mb-2 text-purple-500" />
+                  <p className="text-sm text-purple-700">No tinnitus presets yet</p>
+                  <p className="text-xs mt-1 text-purple-600">
+                    Use the calibration wizard to create a personalized tinnitus preset
                   </p>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="mt-3 text-purple-700 border-purple-300 hover:bg-purple-100"
+                    onClick={() => setIsCalibrationOpen(true)}
+                  >
+                    <Headphones className="h-3 w-3 mr-1" />
+                    Start Calibration
+                  </Button>
                 </div>
-              ) : isSplitEarMode ? (
-                <SplitEarControls 
-                  builtInPresets={presets}
-                  userPresets={user ? userPresets : {}}
-                  splitEarConfig={splitEarConfig}
-                  onLeftEarPresetSelect={handleLeftEarPresetSelect}
-                  onRightEarPresetSelect={handleRightEarPresetSelect}
-                  onDeletePreset={handleDeletePreset}
-                  showUserPresets={true}
-                  showDeleteButton={true}
-                  isEQEnabled={isEQEnabled}
-                  leftEarEnabled={leftEQEnabled}
-                  rightEarEnabled={rightEQEnabled}
-                />
-              ) : (
-                <Presets 
-                  presets={presets}
-                  userPresets={user ? userPresets : {}}
-                  activePresetId={unifiedPresetId}
-                  onPresetSelect={handleUnifiedPresetSelect}
-                  onDeletePreset={handleDeletePreset}
-                  showUserPresets={true}
-                  showDeleteButton={true}
-                  className={isEQEnabled ? '' : 'opacity-60'}
-                />
               )}
             </div>
-          )}
+          </TabsContent>
+          
+          <TabsContent value="custom">
+            <div className="grid grid-cols-2 gap-2">
+              {Object.values(userPresets)
+                .filter(preset => !preset.isCalibrated)
+                .map((preset) => {
+                  const isActive = unifiedPresetId === preset.id;
+                  const style = preset.color;
+                  
+                  return (
+                    <div key={preset.id} className="relative group">
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              className="text-sm font-medium rounded-md shadow-sm transition-colors w-full h-auto py-2 justify-start"
+                              style={{
+                                backgroundColor: isActive ? style.active.bg : style.inactive.bg,
+                                color: isActive ? style.active.text : style.inactive.text,
+                                border: "none",
+                              }}
+                              onClick={() => handleUnifiedPresetSelect(preset)}
+                            >
+                              <div className="flex flex-col items-start">
+                                <span className="font-medium">{preset.name}</span>
+                                <span className="text-xs opacity-70">
+                                  {new Date(preset.dateCreated).toLocaleDateString()}
+                                </span>
+                              </div>
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="right">
+                            <div className="space-y-1 max-w-xs">
+                              <p className="font-medium">{preset.name}</p>
+                              <p className="text-xs">{preset.description}</p>
+                            </div>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                      
+                      {/* Delete button */}
+                      <div className="absolute -right-2 -top-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 rounded-full bg-white shadow border border-gray-200"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeletePreset(preset.id);
+                          }}
+                        >
+                          <Trash2 className="h-3 w-3 text-red-500" />
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              
+              {Object.values(userPresets).filter(preset => !preset.isCalibrated).length === 0 && (
+                <div className="col-span-2 p-4 text-center text-muted-foreground bg-gray-50 rounded-md">
+                  <Save className="h-5 w-5 mx-auto mb-2 text-gray-400" />
+                  <p className="text-sm">No custom presets yet</p>
+                  <p className="text-xs mt-1">
+                    Adjust the EQ and save your settings as a custom preset
+                  </p>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="mt-3"
+                    onClick={handleSaveCurrentEQ}
+                  >
+                    <Save className="h-3 w-3 mr-1" />
+                    Save Current EQ
+                  </Button>
+                </div>
+              )}
+            </div>
+          </TabsContent>
+        </Tabs>
+      </div>
+    )}
+  </div>
+)}
         </div>
       </CardContent>
       
@@ -899,56 +1161,65 @@ const handleBandChange = (
       
       {/* Save Preset Dialog */}
       <Dialog open={showSavePresetDialog} onOpenChange={setShowSavePresetDialog}>
-        <DialogContent className="sm:max-w-md">
-          <div className="space-y-4">
-            <div className="flex flex-col items-center gap-4 pb-2">
-              <div className="p-3 rounded-full bg-blue-50 text-blue-600">
-                <Save size={24} />
-              </div>
-              <div className="text-center space-y-1">
-                <h3 className="text-lg font-semibold">Save Current EQ</h3>
-                <p className="text-sm text-muted-foreground">
-                  Save your current EQ settings as a custom preset
-                </p>
-              </div>
-            </div>
-            
-            <div className="space-y-3">
-              <Label htmlFor="preset-name">Preset Name</Label>
-              <Input
-                id="preset-name"
-                value={newPresetName}
-                onChange={(e) => setNewPresetName(e.target.value)}
-                className="w-full"
-                autoFocus
-              />
-              
-              {!user && (
-                <Alert className="bg-amber-50 text-amber-800 border-amber-200">
-                  <AlertDescription className="text-xs">
-                    Sign in to sync your presets across devices
-                  </AlertDescription>
-                </Alert>
-              )}
-            </div>
-            
-            <div className="flex gap-2 justify-end">
-              <Button 
-                variant="outline" 
-                onClick={() => setShowSavePresetDialog(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={saveCurrentPresetAsNew}
-                className="bg-blue-600 hover:bg-blue-700"
-              >
-                Save Preset
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+  <DialogContent className="sm:max-w-md">
+    <div className="space-y-4">
+      <div className="flex flex-col items-center gap-4 pb-2">
+        <div className="p-3 rounded-full bg-blue-50 text-blue-600">
+          <Save size={24} />
+        </div>
+        <div className="text-center space-y-1">
+          <h3 className="text-lg font-semibold">Save Current EQ</h3>
+          <p className="text-sm text-muted-foreground">
+            Save your current EQ settings as a custom preset
+          </p>
+        </div>
+      </div>
+      
+      <div className="space-y-3">
+        <Label htmlFor="preset-name">Preset Name</Label>
+        <Input
+          id="preset-name"
+          value={newPresetName}
+          onChange={(e) => setNewPresetName(e.target.value)}
+          className="w-full"
+          autoFocus
+        />
+        
+        <Label htmlFor="preset-description">Description</Label>
+        <Input
+          id="preset-description"
+          value={newPresetDescription}
+          onChange={(e) => setNewPresetDescription(e.target.value)}
+          className="w-full"
+          placeholder="Enter a description for this preset"
+        />
+        
+        {!user && (
+          <Alert className="bg-amber-50 text-amber-800 border-amber-200">
+            <AlertDescription className="text-xs">
+              Sign in to sync your presets across devices
+            </AlertDescription>
+          </Alert>
+        )}
+      </div>
+      
+      <div className="flex gap-2 justify-end">
+        <Button 
+          variant="outline" 
+          onClick={() => setShowSavePresetDialog(false)}
+        >
+          Cancel
+        </Button>
+        <Button
+          onClick={saveCurrentPresetAsNew}
+          className="bg-blue-600 hover:bg-blue-700"
+        >
+          Save Preset
+        </Button>
+      </div>
+    </div>
+  </DialogContent>
+</Dialog>
     </Card>
   );
 };

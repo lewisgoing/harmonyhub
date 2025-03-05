@@ -286,23 +286,39 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
     // Draw grid
     drawGrid(ctx, width, height);
     
-    // Draw frequency response if available
-    if (frequencyResponseData) {
-      drawFrequencyResponse(ctx, width, height);
+    // Always draw smooth curves first, whether frequency response data is available or not
+    if (isSplitEarMode) {
+      // Draw left ear curve
+      drawBandCurve(ctx, leftEarBands, LEFT_EAR_COLOR, width, height);
+      
+      // Draw right ear curve
+      drawBandCurve(ctx, rightEarBands, RIGHT_EAR_COLOR, width, height);
+      
+      // Add a legend
+      drawLegend(ctx, width, height);
     } else {
-      // Otherwise, draw EQ curve based on band points
+      // Draw unified curve
+      drawBandCurve(ctx, unifiedBands, UNIFIED_COLOR, width, height);
+    }
+    
+    // If frequency response data is available, use it instead
+    if (frequencyResponseData) {
+      // Clear the curves we just drew
+      ctx.clearRect(0, 0, width, height);
+      
+      // Draw background again
+      ctx.fillStyle = '#f8f9fa';
+      ctx.fillRect(0, 0, width, height);
+      
+      // Draw grid again
+      drawGrid(ctx, width, height);
+      
+      // Draw using frequency response data
+      drawFrequencyResponse(ctx, width, height);
+      
+      // Add legend if in split mode
       if (isSplitEarMode) {
-        // Draw left ear curve
-        drawBandCurve(ctx, leftEarBands, LEFT_EAR_COLOR, width, height);
-        
-        // Draw right ear curve
-        drawBandCurve(ctx, rightEarBands, RIGHT_EAR_COLOR, width, height);
-        
-        // Add a legend
         drawLegend(ctx, width, height);
-      } else {
-        // Draw unified curve
-        drawBandCurve(ctx, unifiedBands, UNIFIED_COLOR, width, height);
       }
     }
     
@@ -311,6 +327,7 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
       drawBandPoints(ctx, width, height);
     }
   };
+
 
   /**
    * Draw the grid on the canvas
@@ -406,46 +423,97 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
       return;
     }
     
-    // Draw curve
-    ctx.beginPath();
+    // Generate interpolated points for a smoother curve
+    // This ensures we have a proper curve even before audio context is initialized
+    const points: {x: number, y: number}[] = [];
     
-    // Start at left edge (lowest possible frequency)
-    const startX = 0;
-    const startY = gainToY(sortedBands[0].gain, height);
-    ctx.moveTo(startX, startY);
+    // Generate curve points
+    const numPoints = 100; // More points = smoother curve
+    const minFreq = 20; // Hz
+    const maxFreq = 20000; // Hz
     
-    // Add points for each band
-    const points = sortedBands.map(band => ({
-      x: freqToX(band.frequency, width),
-      y: gainToY(band.gain, height),
-      frequency: band.frequency,
-      gain: band.gain,
-      Q: band.Q
-    }));
+    // Add edge point at lowest frequency
+    points.push({
+      x: freqToX(minFreq, width),
+      y: gainToY(sortedBands[0].gain, height)
+    });
     
-    // Draw curve through points
-    for (let i = 0; i < points.length; i++) {
-      const point = points[i];
+    // Generate frequency response curve through our band points
+    for (let i = 0; i < numPoints; i++) {
+      // Calculate frequency at this point (logarithmic scale)
+      const t = i / (numPoints - 1);
+      const freq = minFreq * Math.pow(maxFreq / minFreq, t);
       
-      if (i === 0) {
-        // First point
-        ctx.lineTo(point.x, point.y);
-      } else {
-        // Use quadratic curves between points for a smoother look
-        const prevPoint = points[i - 1];
-        const cpX = (prevPoint.x + point.x) / 2;
-        ctx.quadraticCurveTo(
-          prevPoint.x, prevPoint.y,
-          cpX, (prevPoint.y + point.y) / 2
-        );
-        ctx.lineTo(point.x, point.y);
+      // Find the two nearest bands
+      let lowerBand = sortedBands[0];
+      let upperBand = sortedBands[sortedBands.length - 1];
+      
+      for (let j = 0; j < sortedBands.length - 1; j++) {
+        if (freq >= sortedBands[j].frequency && freq <= sortedBands[j + 1].frequency) {
+          lowerBand = sortedBands[j];
+          upperBand = sortedBands[j + 1];
+          break;
+        }
       }
+      
+      // Interpolate gain between the two nearest bands
+      const lowerFreq = lowerBand.frequency;
+      const upperFreq = upperBand.frequency;
+      
+      // Use logarithmic interpolation for frequencies
+      const logLower = Math.log(lowerFreq);
+      const logUpper = Math.log(upperFreq);
+      const logFreq = Math.log(freq);
+      
+      // Calculate the interpolation factor (0-1)
+      let factor = 0;
+      if (logUpper !== logLower) {
+        factor = (logFreq - logLower) / (logUpper - logLower);
+      }
+      
+      // Apply smoothing with cubic easing
+      factor = smoothFactor(factor);
+      
+      // Interpolate the gain
+      const gain = lowerBand.gain + factor * (upperBand.gain - lowerBand.gain);
+      
+      // Add point to our curve
+      points.push({
+        x: freqToX(freq, width),
+        y: gainToY(gain, height)
+      });
     }
     
-    // Continue to right edge
-    const endX = width;
-    const endY = gainToY(sortedBands[sortedBands.length - 1].gain, height);
-    ctx.lineTo(endX, endY);
+    // Add edge point at highest frequency
+    points.push({
+      x: freqToX(maxFreq, width),
+      y: gainToY(sortedBands[sortedBands.length - 1].gain, height)
+    });
+    
+    // Draw the smooth curve through all points
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    
+    // Use quadratic curves between points for a smoother look
+    for (let i = 1; i < points.length; i++) {
+      const prevPoint = points[i - 1];
+      const currPoint = points[i];
+      
+      if (i === 1) {
+        // First segment is a line
+        ctx.lineTo(currPoint.x, currPoint.y);
+      } else {
+        // Use quadratic curve with control point
+        const prevPrevPoint = points[i - 2];
+        const cp1x = (prevPrevPoint.x + prevPoint.x * 2) / 3;
+        const cp1y = (prevPrevPoint.y + prevPoint.y * 2) / 3;
+        const cp2x = (prevPoint.x * 2 + currPoint.x) / 3;
+        const cp2y = (prevPoint.y * 2 + currPoint.y) / 3;
+        
+        // Use a bezier curve for smooth interpolation
+        ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, currPoint.x, currPoint.y);
+      }
+    }
     
     // Stroke the path
     ctx.stroke();
@@ -453,6 +521,13 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
     // Reset opacity
     ctx.globalAlpha = 1.0;
   };
+
+  const smoothFactor = (t: number): number => {
+    // Cubic easing function: t^3
+    return t * t * (3 - 2 * t);
+  }
+  
+  // Update drawEQCurve function to use the improved curves
 
   /**
    * Draw frequency response from audio engine data

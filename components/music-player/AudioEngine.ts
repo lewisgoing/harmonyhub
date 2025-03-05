@@ -298,18 +298,18 @@ export class AudioEngine {
   private applyBalance(): void {
     if (!this.nodes.leftGain || !this.nodes.rightGain) return;
     
-    // First calculate balance (0 = full left, 1 = full right, 0.5 = center)
+    // Calculate balance (0 = full left, 1 = full right, 0.5 = center)
     let leftGain = this.balance <= 0.5 ? 
       1 : 1 - (this.balance - 0.5) * 2;
     
     let rightGain = this.balance >= 0.5 ? 
       1 : this.balance * 2;
     
-    // Then apply individual ear enabled states
-    if (this.splitEarMode) {
-      if (!this.leftEarEnabled) leftGain = 0;
-      if (!this.rightEarEnabled) rightGain = 0;
-    }
+    // REMOVED: The code that was setting gain to 0 based on ear enabled state
+    // if (this.splitEarMode) {
+    //   if (!this.leftEarEnabled) leftGain = 0;
+    //   if (!this.rightEarEnabled) rightGain = 0;
+    // }
     
     // Apply gain values
     this.nodes.leftGain.gain.value = leftGain;

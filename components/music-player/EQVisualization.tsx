@@ -786,10 +786,9 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
   const handleQChange = (value: number) => {
     if (!selectedBandForQ) return;
     
-    // Call the parent's onBandChange with the new Q value
     onBandChange(
       selectedBandForQ.bandId,
-      0, // No gain change
+      undefined, // This is resetting the gain to 0
       value,
       selectedBandForQ.channel
     );

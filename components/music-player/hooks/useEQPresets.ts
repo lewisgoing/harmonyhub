@@ -7,7 +7,7 @@ import { getUserPresets, saveUserPreset as saveCloudPreset, deleteUserPreset as 
 interface UseEQPresetsReturn {
   presets: Record<string, Preset>;
   userPresets: Record<string, UserPreset>;
-  saveUserPreset: (preset: UserPreset) => Promise<void>;
+  saveUserPreset: (preset: UserPreset, callback?: () => void) => Promise<void>;
   deleteUserPreset: (presetId: string) => Promise<void>;
   getPresetById: (id: string) => Preset | undefined;
   createCustomPreset: (
@@ -30,6 +30,10 @@ export function useEQPresets(): UseEQPresetsReturn {
   
   // Loading state
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Add this new state and ref to track save operations
+  const [isSaving, setIsSaving] = useState(false);
+  const pendingSaveRef = useRef<{preset: UserPreset, callback?: () => void} | null>(null);
   
   // Get auth state for cloud sync
   const { user } = useAuth();
@@ -56,65 +60,96 @@ export function useEQPresets(): UseEQPresetsReturn {
     }
   }, []);
 
-// Add this at the beginning of the useEQPresets hook
-const loadingCloudRef = useRef(false);
-const loadAttempts = useRef(0);
-const MAX_LOAD_ATTEMPTS = 3;
+  // Add this at the beginning of the useEQPresets hook
+  const loadingCloudRef = useRef(false);
+  const loadAttempts = useRef(0);
+  const MAX_LOAD_ATTEMPTS = 3;
 
-// Then update the cloud loading effect:
-useEffect(() => {
-  const loadCloudPresets = async () => {
-    // Skip if already loading, no user, or too many attempts
-    if (loadingCloudRef.current || !user || loadAttempts.current >= MAX_LOAD_ATTEMPTS) return;
-    
-    loadingCloudRef.current = true;
-    loadAttempts.current++;
-    setIsLoading(true);
-    
-    try {
-      console.log('Loading cloud presets for user:', user.uid);
-      const cloudPresets = await getUserPresets(user.uid);
-      console.log('Loaded cloud presets:', Object.keys(cloudPresets).length);
+  // Then update the cloud loading effect:
+  useEffect(() => {
+    const loadCloudPresets = async () => {
+      // Skip if already loading, no user, or too many attempts
+      if (loadingCloudRef.current || !user || loadAttempts.current >= MAX_LOAD_ATTEMPTS) return;
       
-      // Get current local presets for merging
-      let currentPresets = { ...userPresets };
+      loadingCloudRef.current = true;
+      loadAttempts.current++;
+      setIsLoading(true);
       
-      // Merge local and cloud presets, with cloud taking precedence
-      const mergedPresets = {
-        ...currentPresets,
-        ...cloudPresets
-      };
-      
-      setUserPresets(mergedPresets);
-      
-      // Also save merged presets back to localStorage for offline access
-      localStorage.setItem(STORAGE_KEYS.USER_PRESETS, JSON.stringify(mergedPresets));
-    } catch (error) {
-      console.error('Failed to load cloud presets:', error);
-      // Don't retry on permission errors
-      if (error.code === 'permission-denied' || error.message.includes('permissions')) {
-        loadAttempts.current = MAX_LOAD_ATTEMPTS; // Stop retrying
+      try {
+        console.log('Loading cloud presets for user:', user.uid);
+        const cloudPresets = await getUserPresets(user.uid);
+        console.log('Loaded cloud presets:', Object.keys(cloudPresets).length);
+        
+        // Get current local presets for merging
+        let currentPresets = { ...userPresets };
+        
+        // Merge local and cloud presets, with cloud taking precedence
+        const mergedPresets = {
+          ...currentPresets,
+          ...cloudPresets
+        };
+        
+        setUserPresets(mergedPresets);
+        
+        // Also save merged presets back to localStorage for offline access
+        localStorage.setItem(STORAGE_KEYS.USER_PRESETS, JSON.stringify(mergedPresets));
+      } catch (error) {
+        console.error('Failed to load cloud presets:', error);
+        // Don't retry on permission errors
+        if (error.code === 'permission-denied' || error.message?.includes('permissions')) {
+          loadAttempts.current = MAX_LOAD_ATTEMPTS; // Stop retrying
+        }
+      } finally {
+        setIsLoading(false);
+        loadingCloudRef.current = false;
       }
-    } finally {
-      setIsLoading(false);
-      loadingCloudRef.current = false;
-    }
-  };
-  
-  if (user) {
-    // Add a small delay to prevent immediate loading
-    const timer = setTimeout(() => {
-      loadCloudPresets();
-    }, 500);
+    };
     
-    return () => clearTimeout(timer);
-  }
-}, [user]);
+    if (user) {
+      // Add a small delay to prevent immediate loading
+      const timer = setTimeout(() => {
+        loadCloudPresets();
+      }, 500);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [user, userPresets]);
 
   /**
-   * Save or update a user preset to both local storage and cloud (if signed in)
+   * Improved save function with debounce and duplicate prevention
    */
-  const saveUserPreset = async (preset: UserPreset) => {
+  const saveUserPreset = async (preset: UserPreset, callback?: () => void) => {
+    // If we're already saving, queue this save for after the current one completes
+    if (isSaving) {
+      pendingSaveRef.current = {preset, callback};
+      return;
+    }
+    
+    setIsSaving(true);
+    
+    // Check if we already have this preset with the exact same content
+    // This prevents unnecessary saves of identical data
+    const existingPreset = userPresets[preset.id];
+    const hasChanged = !existingPreset || 
+      JSON.stringify(existingPreset.bands) !== JSON.stringify(preset.bands) ||
+      existingPreset.name !== preset.name ||
+      existingPreset.description !== preset.description;
+    
+    if (!hasChanged) {
+      console.log('Skipping save - preset has not changed:', preset.id);
+      setIsSaving(false);
+      callback?.();
+      
+      // Process any pending saves
+      if (pendingSaveRef.current) {
+        const {preset: pendingPreset, callback: pendingCallback} = pendingSaveRef.current;
+        pendingSaveRef.current = null;
+        saveUserPreset(pendingPreset, pendingCallback);
+      }
+      
+      return;
+    }
+    
     // Update local state
     setUserPresets(prev => ({
       ...prev,
@@ -141,6 +176,16 @@ useEffect(() => {
       } catch (error) {
         console.error('Failed to save preset to cloud:', error);
       }
+    }
+    
+    setIsSaving(false);
+    callback?.();
+    
+    // Process any pending saves
+    if (pendingSaveRef.current) {
+      const {preset: pendingPreset, callback: pendingCallback} = pendingSaveRef.current;
+      pendingSaveRef.current = null;
+      saveUserPreset(pendingPreset, pendingCallback);
     }
   };
 
@@ -191,15 +236,17 @@ useEffect(() => {
   };
 
   /**
-   * Create a new custom user preset
+   * Create a new custom user preset with improved ID generation
    */
   const createCustomPreset = (
     name: string,
     bands: FrequencyBand[] = [...DEFAULT_FREQUENCY_BANDS],
     tinnitusCenterFreq?: number
   ): UserPreset => {
-    // Generate a unique ID
-    const id = `custom-${Date.now()}`;
+    // Generate a unique ID that includes a timestamp AND a random string
+    // to ensure no duplicates even if created at the exact same millisecond
+    const randomStr = Math.random().toString(36).substring(2, 10);
+    const id = `custom-${Date.now()}-${randomStr}`;
     
     const newPreset: UserPreset = {
       id,

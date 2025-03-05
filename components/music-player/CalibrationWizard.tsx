@@ -1,4 +1,3 @@
-
 "use client";
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
@@ -7,7 +6,7 @@ import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { PlusCircle, MinusCircle, Volume2, VolumeX, ChevronRight, ChevronLeft, Save } from "lucide-react";
+import { PlusCircle, MinusCircle, Volume2, VolumeX, ChevronRight, ChevronLeft, Save, AlertTriangle } from "lucide-react";
 
 import { CALIBRATION_STEPS, TINNITUS_TEST_FREQUENCIES, DEFAULT_FREQUENCY_BANDS } from './constants';
 import { FrequencyBand, UserPreset } from './types';
@@ -31,7 +30,15 @@ const CalibrationWizard: React.FC<CalibrationWizardProps> = ({ onComplete, onCan
   // Frequency selection state
   const [selectedFrequencyIndex, setSelectedFrequencyIndex] = useState<number | null>(null);
   const [customFrequency, setCustomFrequency] = useState(4000); // Default to 4kHz
-  const [volume, setVolume] = useState(0.2); // Range 0-1
+  
+  // Set a safer initial volume (reduced from 0.2 to 0.1)
+  const [volume, setVolume] = useState(0.1);
+  
+  // Add a safer max volume constant
+  const MAX_SAFE_VOLUME = 0.3;
+  
+  // Add warning flag for high volume
+  const [showVolumeWarning, setShowVolumeWarning] = useState(false);
   
   // EQ band adjustment state
   const [notchDepth, setNotchDepth] = useState(-12);
@@ -71,7 +78,7 @@ const CalibrationWizard: React.FC<CalibrationWizardProps> = ({ onComplete, onCan
     
     initAudio();
     
-    // Cleanup
+    // Cleanup on unmount
     return () => {
       stopTone();
       if (audioContext) {
@@ -85,6 +92,13 @@ const CalibrationWizard: React.FC<CalibrationWizardProps> = ({ onComplete, onCan
     if (gainNode) {
       gainNode.gain.value = volume;
     }
+    
+    // Monitor volume for warnings
+    if (volume > 0.25) {
+      setShowVolumeWarning(true);
+    } else {
+      setShowVolumeWarning(false);
+    }
   }, [volume, gainNode]);
   
   // Update calibration results when values change
@@ -97,20 +111,30 @@ const CalibrationWizard: React.FC<CalibrationWizardProps> = ({ onComplete, onCan
   }, [customFrequency, notchDepth, notchWidth]);
   
   /**
-   * Start playing a test tone
+   * Start playing a test tone with a fade-in for a gentler experience
    */
-  const playTone = (frequency: number) => {
+  const safePlayTone = (frequency: number) => {
     if (!audioContext || !gainNode) return;
     
     // Stop any existing tone
     stopTone();
     
-    // Create oscillator
+    // Create oscillator with a fade-in
     const osc = audioContext.createOscillator();
     osc.type = 'sine';
     osc.frequency.value = frequency;
-    osc.connect(gainNode);
+    
+    // Create a temporary gain node for fade-in
+    const tempGain = audioContext.createGain();
+    tempGain.gain.value = 0; // Start silent
+    tempGain.connect(gainNode);
+    
+    // Connect and start
+    osc.connect(tempGain);
     osc.start();
+    
+    // Slowly fade in over 200ms for a less harsh start
+    tempGain.gain.linearRampToValueAtTime(1, audioContext.currentTime + 0.2);
     
     setOscillator(osc);
     setIsPlaying(true);
@@ -136,7 +160,7 @@ const CalibrationWizard: React.FC<CalibrationWizardProps> = ({ onComplete, onCan
     if (isPlaying) {
       stopTone();
     } else {
-      playTone(customFrequency);
+      safePlayTone(customFrequency);
     }
   };
   
@@ -146,7 +170,7 @@ const CalibrationWizard: React.FC<CalibrationWizardProps> = ({ onComplete, onCan
   const handleFrequencySelect = (index: number) => {
     setSelectedFrequencyIndex(index);
     const frequency = TINNITUS_TEST_FREQUENCIES[index].frequency;
-    playTone(frequency);
+    safePlayTone(frequency);
   };
   
   /**
@@ -293,14 +317,26 @@ const CalibrationWizard: React.FC<CalibrationWizardProps> = ({ onComplete, onCan
             </div>
             
             <div className="space-y-2">
-              <Label>Volume</Label>
+              <Label className="flex justify-between">
+                <span>Volume</span>
+                {showVolumeWarning && (
+                  <span className="text-amber-500 text-xs flex items-center">
+                    <AlertTriangle className="h-3 w-3 mr-1" />
+                    High volume - use caution
+                  </span>
+                )}
+              </Label>
               <Slider
                 min={0}
-                max={0.5}
+                max={MAX_SAFE_VOLUME}
                 step={0.01}
                 value={[volume]}
                 onValueChange={(values) => setVolume(values[0])}
               />
+              <div className="flex justify-between text-xs">
+                <span>Quiet</span>
+                <span>Loud</span>
+              </div>
             </div>
           </CardContent>
         );
@@ -312,40 +348,75 @@ const CalibrationWizard: React.FC<CalibrationWizardProps> = ({ onComplete, onCan
               Use the slider to fine-tune the exact frequency that matches your tinnitus.
             </p>
             
-            <div className="bg-muted p-3 rounded-md">
-              <div className="text-center font-mono text-lg mb-2">
-                {customFrequency} Hz
+            <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-4 rounded-md border border-blue-200">
+              <div className="text-center font-mono text-lg mb-3 font-semibold">
+                {customFrequency.toFixed(0)} Hz
               </div>
-              <Slider
-                min={125}
-                max={16000}
-                step={50}
-                value={[customFrequency]}
-                onValueChange={handleFrequencyChange}
-              />
-              <div className="flex justify-between text-xs mt-1">
-                <span>Low</span>
-                <span>High</span>
+              
+              <div className="relative pb-8">
+                <Slider
+                  min={125}
+                  max={16000}
+                  step={50}
+                  value={[customFrequency]}
+                  onValueChange={handleFrequencyChange}
+                />
+                
+                {/* Frequency scale markers */}
+                <div className="absolute w-full flex justify-between mt-2 px-1 text-xs text-gray-500">
+                  <span>125 Hz</span>
+                  <span>1 kHz</span>
+                  <span>4 kHz</span>
+                  <span>8 kHz</span>
+                  <span>16 kHz</span>
+                </div>
+                
+                <div className="absolute bottom-0 left-0 right-0 bg-blue-50 rounded-md p-2 border border-blue-200 mt-6">
+                  <div className="text-xs text-blue-700">
+                    <span className="font-medium block mb-1">Tip:</span>
+                    Most tinnitus is between 3kHz and 8kHz. If you're unsure, try frequencies in this range.
+                  </div>
+                </div>
               </div>
             </div>
             
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <span className="text-sm">Fine adjustment</span>
-                <div className="flex gap-1">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label>Fine Adjustment</Label>
+                <div className="flex gap-1 mt-1">
                   <Button 
-                    size="icon" 
+                    size="sm"
+                    variant="outline" 
+                    onClick={() => handleFrequencyChange([customFrequency - 50])}
+                  >
+                    -50 Hz
+                  </Button>
+                  <Button 
+                    size="sm"
                     variant="outline" 
                     onClick={() => handleFrequencyChange([customFrequency - 10])}
                   >
-                    <MinusCircle size={16} />
+                    -10 Hz
                   </Button>
+                </div>
+              </div>
+              
+              <div>
+                <Label>&nbsp;</Label>
+                <div className="flex gap-1 mt-1">
                   <Button 
-                    size="icon" 
+                    size="sm"
                     variant="outline" 
                     onClick={() => handleFrequencyChange([customFrequency + 10])}
                   >
-                    <PlusCircle size={16} />
+                    +10 Hz
+                  </Button>
+                  <Button 
+                    size="sm"
+                    variant="outline" 
+                    onClick={() => handleFrequencyChange([customFrequency + 50])}
+                  >
+                    +50 Hz
                   </Button>
                 </div>
               </div>
@@ -359,6 +430,25 @@ const CalibrationWizard: React.FC<CalibrationWizardProps> = ({ onComplete, onCan
               >
                 {isPlaying ? "Stop Tone" : "Play Test Tone"}
               </Button>
+            </div>
+            
+            <div className="space-y-2">
+              <Label className="flex justify-between">
+                <span>Volume</span>
+                {showVolumeWarning && (
+                  <span className="text-amber-500 text-xs flex items-center">
+                    <AlertTriangle className="h-3 w-3 mr-1" />
+                    High volume - use caution
+                  </span>
+                )}
+              </Label>
+              <Slider
+                min={0}
+                max={MAX_SAFE_VOLUME}
+                step={0.01}
+                value={[volume]}
+                onValueChange={(values) => setVolume(values[0])}
+              />
             </div>
           </CardContent>
         );

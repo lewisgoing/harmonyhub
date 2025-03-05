@@ -29,6 +29,7 @@ import CalibrationWizard from './CalibrationWizard';
 import UserProfile from '@/components/auth/UserProfile';
 import CloudStatus from '@/components/CloudStatus';
 import CloudPromotion from '@/components/CloudPromotion';
+import CloudSyncDialog from '@/components/CloudSyncDialog';
 
 // Types and constants
 import { SplitEarConfig, FrequencyBand, Preset, UserPreset } from './types';
@@ -59,6 +60,11 @@ const PlayerContainer: React.FC = () => {
   // User preset state from Firebase
   const [firestorePresets, setFirestorePresets] = useState<Record<string, UserPreset>>({});
   const [isLoadingPresets, setIsLoadingPresets] = useState(true);
+
+  // Cloud sync dialog state
+  const [showCloudSyncDialog, setShowCloudSyncDialog] = useState(false);
+  const [pendingCloudSettings, setPendingCloudSettings] = useState<any>(null);
+  const [pendingCloudPresets, setPendingCloudPresets] = useState<Record<string, UserPreset>>({});
 
   // Preset state
   const [unifiedPresetId, setUnifiedPresetId] = useState('flat');
@@ -154,52 +160,18 @@ const PlayerContainer: React.FC = () => {
         try {
           // Fetch presets from Firestore
           const userPresets = await getUserPresets(user.uid);
-          setFirestorePresets(userPresets);
           
           // Load cloud settings if available
           const settings = await getPlaybackSettings(user.uid);
-          if (settings) {
-            // Ask user if they want to use cloud settings
-            const useCloudSettings = window.confirm(
-              "You have saved settings in the cloud. Would you like to load them? " +
-              "This will replace your current local settings."
-            );
-            
-            if (useCloudSettings) {
-              // Apply settings from Firestore
-              setIsEQEnabled(settings.isEQEnabled ?? true);
-              setIsSplitEarMode(settings.isSplitEarMode ?? false);
-              
-              if (settings.splitEarConfig) {
-                setSplitEarConfig(settings.splitEarConfig);
-                
-                // Load left ear preset
-                const leftPreset = getPresetById(settings.splitEarConfig.leftEarPreset);
-                if (leftPreset) {
-                  setLeftEarBands([...leftPreset.bands]);
-                }
-                
-                // Load right ear preset
-                const rightPreset = getPresetById(settings.splitEarConfig.rightEarPreset);
-                if (rightPreset) {
-                  setRightEarBands([...rightPreset.bands]);
-                }
-              }
-              
-              // Set last preset
-              if (settings.lastPresetId) {
-                const preset = getPresetById(settings.lastPresetId);
-                if (preset) {
-                  setUnifiedPresetId(preset.id);
-                  setUnifiedBands([...preset.bands]);
-                }
-              }
-              
-              toast({
-                title: "Cloud settings loaded",
-                description: "Your settings have been loaded from the cloud.",
-              });
-            }
+          
+          // If we have cloud settings, show the dialog instead of a browser prompt
+          if (settings && Object.keys(userPresets).length > 0) {
+            setPendingCloudSettings(settings);
+            setPendingCloudPresets(userPresets);
+            setShowCloudSyncDialog(true);
+          } else {
+            // If we only have presets but no settings, just merge the presets
+            setFirestorePresets(userPresets);
           }
         } catch (error) {
           console.error('Failed to load user presets from Firestore:', error);
@@ -212,6 +184,63 @@ const PlayerContainer: React.FC = () => {
     
     loadPresets();
   }, [user]);
+
+  // Handler functions for cloud sync dialog
+  const handleApplyCloudSettings = () => {
+    if (pendingCloudSettings) {
+      // Apply settings from Firestore
+      setIsEQEnabled(pendingCloudSettings.isEQEnabled ?? true);
+      setIsSplitEarMode(pendingCloudSettings.isSplitEarMode ?? false);
+      
+      if (pendingCloudSettings.splitEarConfig) {
+        setSplitEarConfig(pendingCloudSettings.splitEarConfig);
+        
+        // Load left ear preset
+        const leftPreset = getPresetById(pendingCloudSettings.splitEarConfig.leftEarPreset);
+        if (leftPreset) {
+          setLeftEarBands([...leftPreset.bands]);
+        }
+        
+        // Load right ear preset
+        const rightPreset = getPresetById(pendingCloudSettings.splitEarConfig.rightEarPreset);
+        if (rightPreset) {
+          setRightEarBands([...rightPreset.bands]);
+        }
+      }
+      
+      // Set last preset
+      if (pendingCloudSettings.lastPresetId) {
+        const preset = getPresetById(pendingCloudSettings.lastPresetId);
+        if (preset) {
+          setUnifiedPresetId(preset.id);
+          setUnifiedBands([...preset.bands]);
+        }
+      }
+      
+      // Set the firestore presets
+      setFirestorePresets(pendingCloudPresets);
+      
+      toast({
+        title: "Cloud settings loaded",
+        description: "Your settings have been loaded from the cloud.",
+      });
+    }
+    
+    // Close the dialog
+    setShowCloudSyncDialog(false);
+    setPendingCloudSettings(null);
+    setPendingCloudPresets({});
+  };
+
+  const handleKeepLocalSettings = () => {
+    // Just merge the presets but don't apply the settings
+    setFirestorePresets(pendingCloudPresets);
+    
+    // Close the dialog
+    setShowCloudSyncDialog(false);
+    setPendingCloudSettings(null);
+    setPendingCloudPresets({});
+  };
 
   // Load from localStorage (for non-authenticated users or as fallback)
   const loadSettingsFromLocalStorage = () => {
@@ -445,19 +474,19 @@ const PlayerContainer: React.FC = () => {
     if (channel === 'unified') {
       setUnifiedBands(prev => prev.map(band => 
         band.id === bandId 
-          ? { ...band, gain: newGain, ...(newQ ? { Q: newQ } : {}) } 
+          ? { ...band, gain: newGain !== undefined ? newGain : band.gain, Q: newQ !== undefined ? newQ : band.Q } 
           : band
       ));
     } else if (channel === 'left') {
       setLeftEarBands(prev => prev.map(band => 
         band.id === bandId 
-          ? { ...band, gain: newGain, ...(newQ ? { Q: newQ } : {}) } 
+          ? { ...band, gain: newGain !== undefined ? newGain : band.gain, Q: newQ !== undefined ? newQ : band.Q } 
           : band
       ));
     } else if (channel === 'right') {
       setRightEarBands(prev => prev.map(band => 
         band.id === bandId 
-          ? { ...band, gain: newGain, ...(newQ ? { Q: newQ } : {}) } 
+          ? { ...band, gain: newGain !== undefined ? newGain : band.gain, Q: newQ !== undefined ? newQ : band.Q } 
           : band
       ));
     }
@@ -615,18 +644,18 @@ const PlayerContainer: React.FC = () => {
           
           {/* EQ visualization */}
           <EQVisualization 
-  isEQEnabled={isEQEnabled}
-  isSplitEarMode={isSplitEarMode}
-  unifiedBands={unifiedBands}
-  leftEarBands={leftEarBands}
-  rightEarBands={rightEarBands}
-  frequencyResponseData={frequencyResponseData}
-  onBandChange={handleBandChange}
-  onFrequencyChange={handleFrequencyChange}
-  height={140}
-  allowXDragging={true}
-  allowYDragging={true}
-/>
+            isEQEnabled={isEQEnabled}
+            isSplitEarMode={isSplitEarMode}
+            unifiedBands={unifiedBands}
+            leftEarBands={leftEarBands}
+            rightEarBands={rightEarBands}
+            frequencyResponseData={frequencyResponseData}
+            onBandChange={handleBandChange}
+            onFrequencyChange={handleFrequencyChange}
+            height={140}
+            allowXDragging={true}
+            allowYDragging={true}
+          />
           
           {/* EQ controls */}
           <EQControls 
@@ -701,6 +730,15 @@ const PlayerContainer: React.FC = () => {
           />
         </DialogContent>
       </Dialog>
+      
+      {/* Cloud Sync Dialog */}
+      <CloudSyncDialog 
+        open={showCloudSyncDialog}
+        onOpenChange={setShowCloudSyncDialog}
+        onApplyCloudSettings={handleApplyCloudSettings}
+        onKeepLocalSettings={handleKeepLocalSettings}
+        numPresets={Object.keys(pendingCloudPresets).length}
+      />
     </Card>
   );
 };

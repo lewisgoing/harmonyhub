@@ -454,33 +454,45 @@ const PlayerContainer: React.FC = () => {
   /**
    * Update a single frequency band
    */
-  const handleBandChange = (
-    bandId: string,
-    newGain: number,
-    newQ?: number,
-    channel: 'unified' | 'left' | 'right' = 'unified'
-  ) => {
-    // Handle different channels
-    if (channel === 'unified') {
-      setUnifiedBands(prev => prev.map(band => 
-        band.id === bandId 
-          ? { ...band, gain: newGain !== undefined ? newGain : band.gain, Q: newQ !== undefined ? newQ : band.Q } 
-          : band
-      ));
-    } else if (channel === 'left') {
-      setLeftEarBands(prev => prev.map(band => 
-        band.id === bandId 
-          ? { ...band, gain: newGain !== undefined ? newGain : band.gain, Q: newQ !== undefined ? newQ : band.Q } 
-          : band
-      ));
-    } else if (channel === 'right') {
-      setRightEarBands(prev => prev.map(band => 
-        band.id === bandId 
-          ? { ...band, gain: newGain !== undefined ? newGain : band.gain, Q: newQ !== undefined ? newQ : band.Q } 
-          : band
-      ));
-    }
-  };
+/**
+ * Update a single frequency band
+ */
+const handleBandChange = (
+  bandId: string,
+  newGain?: number, // Make newGain optional
+  newQ?: number,
+  channel: 'unified' | 'left' | 'right' = 'unified'
+) => {
+  // Handle different channels
+  if (channel === 'unified') {
+    setUnifiedBands(prev => prev.map(band => 
+      band.id === bandId 
+        ? { ...band, 
+            gain: newGain !== undefined ? newGain : band.gain, 
+            Q: newQ !== undefined ? newQ : band.Q 
+          } 
+        : band
+    ));
+  } else if (channel === 'left') {
+    setLeftEarBands(prev => prev.map(band => 
+      band.id === bandId 
+        ? { ...band, 
+            gain: newGain !== undefined ? newGain : band.gain, 
+            Q: newQ !== undefined ? newQ : band.Q 
+          } 
+        : band
+    ));
+  } else if (channel === 'right') {
+    setRightEarBands(prev => prev.map(band => 
+      band.id === bandId 
+        ? { ...band, 
+            gain: newGain !== undefined ? newGain : band.gain, 
+            Q: newQ !== undefined ? newQ : band.Q 
+          } 
+        : band
+    ));
+  }
+};
 
   /**
    * Handle frequency change for a band

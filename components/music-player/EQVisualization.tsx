@@ -26,7 +26,7 @@ interface EQVisualizationProps {
   // Callbacks for interactive adjustments
   onBandChange: (
     bandId: string, 
-    newGain: number, 
+    newGain?: number, // Make newGain optional
     newQ?: number, 
     channel?: 'unified' | 'left' | 'right'
   ) => void;
@@ -786,14 +786,14 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
   const handleQChange = (value: number) => {
     if (!selectedBandForQ) return;
     
+    // Call the parent's onBandChange with the new Q value
     onBandChange(
       selectedBandForQ.bandId,
-      undefined, // This is resetting the gain to 0
+      undefined, // Now this will work with the updated type
       value,
       selectedBandForQ.channel
     );
   };
-
   /**
    * Helper function to get the current Q value
    */

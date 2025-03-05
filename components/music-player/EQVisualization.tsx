@@ -2,6 +2,9 @@
 
 import React, { useRef, useEffect, useState } from 'react';
 import { FrequencyBand } from './types';
+import { Slider } from '@/components/ui/slider';
+import { Button } from '@/components/ui/button';
+import { X } from 'lucide-react';
 
 interface EQVisualizationProps {
   // EQ state
@@ -28,7 +31,7 @@ interface EQVisualizationProps {
     channel?: 'unified' | 'left' | 'right'
   ) => void;
   
-  // NEW: Callback for frequency changes (X-axis dragging)
+  // Callback for frequency changes (X-axis dragging)
   onFrequencyChange?: (
     bandId: string,
     newFrequency: number,
@@ -47,7 +50,7 @@ interface EQVisualizationProps {
   minGain?: number;
   maxGain?: number;
   
-  // NEW: Allow or disallow X/Y dragging
+  // Allow or disallow X/Y dragging
   allowXDragging?: boolean;
   allowYDragging?: boolean;
 }
@@ -61,30 +64,72 @@ const RIGHT_EAR_COLOR = '#ef4444'; // Red
 const DISABLED_OPACITY = 0.4;
 const GRID_COLOR = '#e9ecef';
 const ZERO_LINE_COLOR = '#ced4da';
-const FREQUENCY_LABELS = ['60Hz', '125Hz', '250Hz', '500Hz', '1kHz', '2kHz', '4kHz', '8kHz', '16kHz'];
-const FREQUENCY_POSITIONS = [60, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
+const FREQUENCY_LABELS = ['60Hz', '250Hz', '1kHz', '2kHz', '4kHz', '8kHz', '12kHz', '16kHz'];
+const FREQUENCY_POSITIONS = [60, 250, 1000, 2000, 4000, 8000, 12000, 16000];
 const DB_RANGE = 24; // +/- 12dB
 
 /**
- * Convert frequency to x position on canvas
+ * Convert frequency to x position with improved high frequency visibility
  */
 const freqToX = (freq: number, width: number): number => {
-  // Logarithmic scale from 60Hz to 16kHz
-  const minLog = Math.log10(60);
-  const maxLog = Math.log10(16000);
-  const logPos = (Math.log10(Math.max(60, freq)) - minLog) / (maxLog - minLog);
-  return logPos * width;
+  // Use a log scale with more emphasis on the 2-8kHz range important for tinnitus
+  // We'll use a custom scale that divides the x-axis into three regions:
+  // 1. 60Hz-2kHz: 35% of the width
+  // 2. 2kHz-8kHz: 40% of the width (tinnitus focus area)
+  // 3. 8kHz-16kHz: 25% of the width
+  
+  if (freq <= 2000) {
+    // Region 1: 60Hz-2kHz (35% of width)
+    const minLog = Math.log10(60);
+    const maxLog = Math.log10(2000);
+    const logPos = (Math.log10(Math.max(60, freq)) - minLog) / (maxLog - minLog);
+    return logPos * width * 0.35;
+  } else if (freq <= 8000) {
+    // Region 2: 2kHz-8kHz (40% of width) - expanded tinnitus region
+    const region1Width = width * 0.35;
+    const regionWidth = width * 0.4;
+    const minLog = Math.log10(2000);
+    const maxLog = Math.log10(8000);
+    const logPos = (Math.log10(freq) - minLog) / (maxLog - minLog);
+    return region1Width + (logPos * regionWidth);
+  } else {
+    // Region 3: 8kHz-16kHz (25% of width)
+    const region1and2Width = width * 0.75;
+    const regionWidth = width * 0.25;
+    const minLog = Math.log10(8000);
+    const maxLog = Math.log10(16000);
+    const logPos = (Math.log10(Math.min(16000, freq)) - minLog) / (maxLog - minLog);
+    return region1and2Width + (logPos * regionWidth);
+  }
 };
 
 /**
- * Convert x position on canvas to frequency
+ * Convert x position to frequency with improved high frequency mapping
  */
 const xToFreq = (x: number, width: number): number => {
-  // Logarithmic scale from 60Hz to 16kHz
-  const minLog = Math.log10(60);
-  const maxLog = Math.log10(16000);
-  const logPos = x / width;
-  return Math.pow(10, minLog + logPos * (maxLog - minLog));
+  // Reverse the custom scaling used in freqToX
+  const region1Width = width * 0.35;
+  const region2Width = width * 0.4;
+  
+  if (x <= region1Width) {
+    // Region 1: 60Hz-2kHz
+    const minLog = Math.log10(60);
+    const maxLog = Math.log10(2000);
+    const logPos = x / region1Width;
+    return Math.pow(10, minLog + logPos * (maxLog - minLog));
+  } else if (x <= region1Width + region2Width) {
+    // Region 2: 2kHz-8kHz (expanded tinnitus region)
+    const minLog = Math.log10(2000);
+    const maxLog = Math.log10(8000);
+    const logPos = (x - region1Width) / region2Width;
+    return Math.pow(10, minLog + logPos * (maxLog - minLog));
+  } else {
+    // Region 3: 8kHz-16kHz
+    const minLog = Math.log10(8000);
+    const maxLog = Math.log10(16000);
+    const logPos = (x - (region1Width + region2Width)) / (width - (region1Width + region2Width));
+    return Math.pow(10, minLog + logPos * (maxLog - minLog));
+  }
 };
 
 /**
@@ -159,6 +204,17 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
     bandId: string;
     channel: 'unified' | 'left' | 'right';
   } | null>(null);
+  
+  // Add state to track when Q value adjustment is active
+  const [isAdjustingQ, setIsAdjustingQ] = useState(false);
+  const [selectedBandForQ, setSelectedBandForQ] = useState<{
+    bandId: string;
+    channel: 'unified' | 'left' | 'right';
+    initialQ: number;
+  } | null>(null);
+  
+  // Add a state to track the last click time for double-click detection
+  const [lastClickTime, setLastClickTime] = useState(0);
 
   // Redraw when props change
   useEffect(() => {
@@ -559,13 +615,40 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
     ctx.arc(x, y, radius, 0, Math.PI * 2);
     ctx.stroke();
     
+    // If this point is selected for Q adjustment, draw Q indicator
+    if (isAdjustingQ && 
+        selectedBandForQ && 
+        selectedBandForQ.bandId === band.id && 
+        selectedBandForQ.channel === channel) {
+      // Draw an outer ring to indicate Q adjustment mode
+      ctx.strokeStyle = 'yellow';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(x, y, radius + 4, 0, Math.PI * 2);
+      ctx.stroke();
+      
+      // Draw a "Q" indicator
+      ctx.fillStyle = 'yellow';
+      ctx.font = 'bold 10px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('Q', x, y - radius - 8);
+    }
+    
     // Reset opacity
     ctx.globalAlpha = 1.0;
     
     // If active, show frequency and gain
     if (isActive && canvasRef.current) {
       // Show tooltip with frequency and gain
-      showTooltip(band.frequency, band.gain, x, y);
+      const tooltipInfo = isAdjustingQ && 
+                        selectedBandForQ && 
+                        selectedBandForQ.bandId === band.id && 
+                        selectedBandForQ.channel === channel
+        ? `${band.frequency.toFixed(0)} Hz: ${band.gain.toFixed(1)} dB, Q: ${band.Q.toFixed(1)}`
+        : `${band.frequency.toFixed(0)} Hz: ${band.gain.toFixed(1)} dB`;
+      
+      showTooltip(band.frequency, band.gain, x, y, tooltipInfo);
       
       // Draw direction indicators if we're allowing XY dragging
       if (allowXDragging && allowYDragging) {
@@ -612,7 +695,13 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
   /**
    * Show tooltip with frequency and gain information
    */
-  const showTooltip = (frequency: number, gain: number, x: number, y: number) => {
+  const showTooltip = (
+    frequency: number, 
+    gain: number, 
+    x: number, 
+    y: number, 
+    customText?: string
+  ) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     
@@ -626,7 +715,7 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
     tooltip.style.left = `${rect.left + x}px`;
     tooltip.style.top = `${rect.top + y - 30}px`;
     tooltip.style.transform = 'translateX(-50%)';
-    tooltip.textContent = `${frequency.toFixed(0)} Hz: ${gain.toFixed(1)} dB`;
+    tooltip.textContent = customText || `${frequency.toFixed(0)} Hz: ${gain.toFixed(1)} dB`;
     
     // Add to document
     document.body.appendChild(tooltip);
@@ -652,7 +741,79 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
   };
 
   /**
-   * Handle mouse down on canvas
+   * Add a function to toggle Q value adjustment mode
+   */
+  const toggleQAdjustment = (
+    bandId: string,
+    channel: 'unified' | 'left' | 'right'
+  ) => {
+    // If we're already adjusting Q for this band, exit Q adjustment mode
+    if (selectedBandForQ?.bandId === bandId && selectedBandForQ?.channel === channel) {
+      setIsAdjustingQ(false);
+      setSelectedBandForQ(null);
+      return;
+    }
+    
+    // Otherwise, enter Q adjustment mode for this band
+    let initialQ = 1.0;
+    
+    if (channel === 'unified') {
+      const band = unifiedBands.find(b => b.id === bandId);
+      if (band) initialQ = band.Q;
+    } else if (channel === 'left') {
+      const band = leftEarBands.find(b => b.id === bandId);
+      if (band) initialQ = band.Q;
+    } else if (channel === 'right') {
+      const band = rightEarBands.find(b => b.id === bandId);
+      if (band) initialQ = band.Q;
+    }
+    
+    setSelectedBandForQ({
+      bandId,
+      channel,
+      initialQ
+    });
+    
+    setIsAdjustingQ(true);
+    
+    // Ensure we're not in drag mode
+    setDraggedPoint(null);
+  };
+
+  /**
+   * Handle Q value changes
+   */
+  const handleQChange = (value: number) => {
+    if (!selectedBandForQ) return;
+    
+    // Call the parent's onBandChange with the new Q value
+    onBandChange(
+      selectedBandForQ.bandId,
+      0, // No gain change
+      value,
+      selectedBandForQ.channel
+    );
+  };
+
+  /**
+   * Helper function to get the current Q value
+   */
+  const getBandQ = (bandId: string, channel: 'unified' | 'left' | 'right'): number => {
+    if (channel === 'unified') {
+      const band = unifiedBands.find(b => b.id === bandId);
+      return band?.Q || 1.0;
+    } else if (channel === 'left') {
+      const band = leftEarBands.find(b => b.id === bandId);
+      return band?.Q || 1.0;
+    } else if (channel === 'right') {
+      const band = rightEarBands.find(b => b.id === bandId);
+      return band?.Q || 1.0;
+    }
+    return 1.0;
+  };
+
+  /**
+   * Handle mouse down on canvas with double-click detection
    */
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!interactive || !isEQEnabled || !canvasRef.current) return;
@@ -665,6 +826,16 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
     // Find the closest point
     const point = findClosestPoint(x, y);
     if (point) {
+      const now = Date.now();
+      const isDoubleClick = (now - lastClickTime) < 300; // 300ms threshold for double-click
+      setLastClickTime(now);
+      
+      // If double-click, toggle Q adjustment mode
+      if (isDoubleClick) {
+        toggleQAdjustment(point.bandId, point.channel);
+        return;
+      }
+      
       // Get initial values for the point
       let initialFreq = 0;
       let initialGain = 0;
@@ -689,6 +860,19 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
         }
       }
       
+      // If we're in Q adjustment mode and this is a different band, switch to that band
+      if (isAdjustingQ && selectedBandForQ && 
+          (selectedBandForQ.bandId !== point.bandId || selectedBandForQ.channel !== point.channel)) {
+        toggleQAdjustment(point.bandId, point.channel);
+        return;
+      }
+      
+      // Exit Q adjustment mode if we're dragging a point
+      if (isAdjustingQ) {
+        setIsAdjustingQ(false);
+        setSelectedBandForQ(null);
+      }
+      
       setDraggedPoint({
         bandId: point.bandId,
         channel: point.channel,
@@ -700,13 +884,12 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
         isDraggingY: allowYDragging
       });
       
-      // Detect if we should be only dragging in one direction (if both are allowed)
-      if (allowXDragging && allowYDragging) {
-        // We'll determine the primary drag direction on first movement
-      }
-      
       // Prevent text selection during drag
       e.preventDefault();
+    } else {
+      // Click outside any point, exit Q adjustment mode
+      setIsAdjustingQ(false);
+      setSelectedBandForQ(null);
     }
   };
 
@@ -893,6 +1076,11 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
       className="relative w-full h-full border border-gray-200 rounded-md overflow-hidden"
       style={{ height }}
     >
+      {/* Instructions for Q adjustment */}
+      <div className="absolute top-2 right-2 text-xs text-gray-500 bg-white/80 px-2 py-1 rounded z-10">
+        Double-click point to adjust Q
+      </div>
+      
       <div className="p-2 w-full h-full">
         <canvas
           ref={canvasRef}
@@ -904,6 +1092,33 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
           onMouseLeave={handleMouseLeave}
         />
       </div>
+      
+      {/* Q adjustment slider */}
+      {isAdjustingQ && selectedBandForQ && (
+        <div className="absolute bottom-0 left-0 right-0 bg-black/80 text-white p-2 flex items-center gap-2">
+          <span className="text-xs whitespace-nowrap">Q Value:</span>
+          <Slider
+            min={0.1}
+            max={10}
+            step={0.1}
+            value={[getBandQ(selectedBandForQ.bandId, selectedBandForQ.channel)]}
+            onValueChange={(values) => handleQChange(values[0])}
+            className="flex-1"
+          />
+          <span className="text-xs font-mono">{getBandQ(selectedBandForQ.bandId, selectedBandForQ.channel).toFixed(1)}</span>
+          <Button 
+            size="sm" 
+            variant="ghost"
+            className="h-6 w-6 p-0 text-white"
+            onClick={() => {
+              setIsAdjustingQ(false);
+              setSelectedBandForQ(null);
+            }}
+          >
+            <X className="h-3 w-3" />
+          </Button>
+        </div>
+      )}
     </div>
   );
 };

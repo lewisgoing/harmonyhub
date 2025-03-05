@@ -14,11 +14,14 @@ interface SplitEarControlsProps {
   onLeftEarPresetSelect: (preset: Preset) => void;
   onRightEarPresetSelect: (preset: Preset) => void;
   onDeletePreset?: (presetId: string) => void;
+  onSavePreset?: () => void;
   
   // Display options
   showUserPresets?: boolean;
   showDeleteButton?: boolean;
   isEQEnabled?: boolean;
+  leftEarEnabled?: boolean;
+  rightEarEnabled?: boolean;
 }
 
 /**
@@ -32,14 +35,17 @@ const SplitEarControls: React.FC<SplitEarControlsProps> = ({
   onLeftEarPresetSelect,
   onRightEarPresetSelect,
   onDeletePreset,
+  onSavePreset,
   showUserPresets = true,
   showDeleteButton = true,
-  isEQEnabled = true
+  isEQEnabled = true,
+  leftEarEnabled = true,
+  rightEarEnabled = true
 }) => {
   return (
     <div className="space-y-6">
       {/* Left ear presets */}
-      <div className={`${!isEQEnabled ? 'opacity-60' : ''}`}>
+      <div className={`${!isEQEnabled || !leftEarEnabled ? 'opacity-60' : ''}`}>
         <Presets 
           presets={builtInPresets}
           userPresets={userPresets}
@@ -47,16 +53,17 @@ const SplitEarControls: React.FC<SplitEarControlsProps> = ({
           ear="left"
           onPresetSelect={onLeftEarPresetSelect}
           onDeletePreset={onDeletePreset}
+          onSavePreset={onSavePreset}
           showUserPresets={showUserPresets}
           showDeleteButton={showDeleteButton}
           showLabel={true}
         />
       </div>
       
-      <Separator />
+      <Separator className="opacity-30" />
       
       {/* Right ear presets */}
-      <div className={`${!isEQEnabled ? 'opacity-60' : ''}`}>
+      <div className={`${!isEQEnabled || !rightEarEnabled ? 'opacity-60' : ''}`}>
         <Presets 
           presets={builtInPresets}
           userPresets={userPresets}
@@ -64,6 +71,7 @@ const SplitEarControls: React.FC<SplitEarControlsProps> = ({
           ear="right"
           onPresetSelect={onRightEarPresetSelect}
           onDeletePreset={onDeletePreset}
+          onSavePreset={onSavePreset}
           showUserPresets={showUserPresets}
           showDeleteButton={showDeleteButton}
           showLabel={true}

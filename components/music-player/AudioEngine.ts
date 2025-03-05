@@ -6,7 +6,7 @@ import { DEFAULT_FREQUENCY_BANDS } from './constants';
  */
 export class AudioEngine {
   private audioElement: HTMLAudioElement | null = null;
-  private nodes: AudioNodes = {
+  public nodes: AudioNodes = {
     context: null,
     source: null,
     filters: [],
@@ -20,6 +20,8 @@ export class AudioEngine {
   
   private initialized = false;
   private eqEnabled = true;
+  private leftEarEnabled = true;
+  private rightEarEnabled = true;
   private splitEarMode = false;
   private channelMode: ChannelMode = 'stereo';
   private soloMode: SoloMode = 'none';
@@ -168,7 +170,7 @@ export class AudioEngine {
         const rightFilters = this.createFiltersFromBands(context, this.rightEarBands);
         this.nodes.rightFilters = rightFilters;
         
-        // Apply balance
+        // Apply gain and balance
         this.applyBalance();
         
         // Connect everything in sequence
@@ -223,19 +225,25 @@ export class AudioEngine {
         this.nodes.leftGain = leftGain;
         this.nodes.rightGain = rightGain;
         
-        // Apply balance
+        // Apply gain and balance
         this.applyBalance();
         
         // Connect nodes: Source -> Filters -> Splitter -> Gains -> Merger -> Destination
-        mediaSource.connect(filters[0]);
-        
-        // Connect filters in sequence
-        for (let i = 0; i < filters.length - 1; i++) {
-          filters[i].connect(filters[i + 1]);
+        if (this.eqEnabled) {
+          mediaSource.connect(filters[0]);
+          
+          // Connect filters in sequence
+          for (let i = 0; i < filters.length - 1; i++) {
+            filters[i].connect(filters[i + 1]);
+          }
+          
+          // Split for balance control
+          filters[filters.length - 1].connect(splitter);
+        } else {
+          // Skip filters if EQ is disabled
+          mediaSource.connect(splitter);
         }
         
-        // Split for balance control
-        filters[filters.length - 1].connect(splitter);
         splitter.connect(leftGain, 0);
         splitter.connect(rightGain, 1);
         leftGain.connect(merger, 0, 0);
@@ -251,6 +259,18 @@ export class AudioEngine {
       return true;
     } catch (error) {
       console.error("Error in updateAudioRouting:", error);
+      
+      // Fallback: direct connection if routing fails
+      try {
+        if (this.nodes.source && this.nodes.context) {
+          this.nodes.source.disconnect();
+          this.nodes.source.connect(this.nodes.context.destination);
+          console.log("Fallback connection established");
+        }
+      } catch (e) {
+        console.error("Fallback connection failed:", e);
+      }
+      
       return false;
     }
   }
@@ -278,12 +298,22 @@ export class AudioEngine {
   private applyBalance(): void {
     if (!this.nodes.leftGain || !this.nodes.rightGain) return;
     
-    // Apply balance (0 = full left, 1 = full right, 0.5 = center)
-    this.nodes.leftGain.gain.value = this.balance <= 0.5 ? 
+    // First calculate balance (0 = full left, 1 = full right, 0.5 = center)
+    let leftGain = this.balance <= 0.5 ? 
       1 : 1 - (this.balance - 0.5) * 2;
     
-    this.nodes.rightGain.gain.value = this.balance >= 0.5 ? 
+    let rightGain = this.balance >= 0.5 ? 
       1 : this.balance * 2;
+    
+    // Then apply individual ear enabled states
+    if (this.splitEarMode) {
+      if (!this.leftEarEnabled) leftGain = 0;
+      if (!this.rightEarEnabled) rightGain = 0;
+    }
+    
+    // Apply gain values
+    this.nodes.leftGain.gain.value = leftGain;
+    this.nodes.rightGain.gain.value = rightGain;
     
     // Apply solo mode if active
     if (this.soloMode === 'left') {
@@ -303,13 +333,25 @@ export class AudioEngine {
   private applyEQSettings(): void {
     if (this.splitEarMode) {
       // Apply to left ear filters
-      this.applyBandsToFilters(this.leftEarBands, this.nodes.leftFilters);
+      this.applyBandsToFilters(
+        this.leftEarBands, 
+        this.nodes.leftFilters, 
+        this.eqEnabled && this.leftEarEnabled
+      );
       
       // Apply to right ear filters
-      this.applyBandsToFilters(this.rightEarBands, this.nodes.rightFilters);
+      this.applyBandsToFilters(
+        this.rightEarBands, 
+        this.nodes.rightFilters,
+        this.eqEnabled && this.rightEarEnabled
+      );
     } else {
       // Apply to unified filters
-      this.applyBandsToFilters(this.unifiedBands, this.nodes.filters);
+      this.applyBandsToFilters(
+        this.unifiedBands, 
+        this.nodes.filters,
+        this.eqEnabled
+      );
     }
   }
 
@@ -318,13 +360,14 @@ export class AudioEngine {
    */
   private applyBandsToFilters(
     bands: FrequencyBand[], 
-    filters: BiquadFilterNode[]
+    filters: BiquadFilterNode[],
+    enabled: boolean
   ): void {
     bands.forEach((band, index) => {
       if (index < filters.length) {
         const filter = filters[index];
         filter.frequency.value = band.frequency;
-        filter.gain.value = this.eqEnabled ? band.gain : 0;
+        filter.gain.value = enabled ? band.gain : 0;
         filter.Q.value = band.Q;
       }
     });
@@ -336,6 +379,11 @@ export class AudioEngine {
   public setEQEnabled(enabled: boolean): void {
     this.eqEnabled = enabled;
     this.applyEQSettings();
+    
+    // For unified mode, we need to rewire when toggling EQ
+    if (!this.splitEarMode) {
+      this.updateAudioRouting();
+    }
   }
 
   /**
@@ -344,7 +392,11 @@ export class AudioEngine {
   public setUnifiedBands(bands: FrequencyBand[]): void {
     this.unifiedBands = [...bands];
     if (!this.splitEarMode) {
-      this.applyBandsToFilters(this.unifiedBands, this.nodes.filters);
+      this.applyBandsToFilters(
+        this.unifiedBands, 
+        this.nodes.filters,
+        this.eqEnabled
+      );
     }
   }
 
@@ -354,7 +406,11 @@ export class AudioEngine {
   public setLeftEarBands(bands: FrequencyBand[]): void {
     this.leftEarBands = [...bands];
     if (this.splitEarMode) {
-      this.applyBandsToFilters(this.leftEarBands, this.nodes.leftFilters);
+      this.applyBandsToFilters(
+        this.leftEarBands, 
+        this.nodes.leftFilters,
+        this.eqEnabled && this.leftEarEnabled
+      );
     }
   }
 
@@ -364,7 +420,11 @@ export class AudioEngine {
   public setRightEarBands(bands: FrequencyBand[]): void {
     this.rightEarBands = [...bands];
     if (this.splitEarMode) {
-      this.applyBandsToFilters(this.rightEarBands, this.nodes.rightFilters);
+      this.applyBandsToFilters(
+        this.rightEarBands, 
+        this.nodes.rightFilters,
+        this.eqEnabled && this.rightEarEnabled
+      );
     }
   }
 
@@ -375,6 +435,33 @@ export class AudioEngine {
     if (this.splitEarMode !== enabled) {
       this.splitEarMode = enabled;
       this.updateAudioRouting();
+    }
+  }
+
+  /**
+   * Set individual ear enabled states
+   */
+  public setLeftEarEnabled(enabled: boolean): void {
+    this.leftEarEnabled = enabled;
+    if (this.splitEarMode) {
+      this.applyBandsToFilters(
+        this.leftEarBands, 
+        this.nodes.leftFilters,
+        this.eqEnabled && enabled
+      );
+      this.applyBalance();
+    }
+  }
+  
+  public setRightEarEnabled(enabled: boolean): void {
+    this.rightEarEnabled = enabled;
+    if (this.splitEarMode) {
+      this.applyBandsToFilters(
+        this.rightEarBands, 
+        this.nodes.rightFilters,
+        this.eqEnabled && enabled
+      );
+      this.applyBalance();
     }
   }
 
@@ -409,7 +496,11 @@ export class AudioEngine {
   public applyUnifiedPreset(preset: Preset): void {
     this.unifiedBands = [...preset.bands];
     if (!this.splitEarMode) {
-      this.applyBandsToFilters(this.unifiedBands, this.nodes.filters);
+      this.applyBandsToFilters(
+        this.unifiedBands, 
+        this.nodes.filters,
+        this.eqEnabled
+      );
     }
   }
 
@@ -419,7 +510,11 @@ export class AudioEngine {
   public applyLeftEarPreset(preset: Preset): void {
     this.leftEarBands = [...preset.bands];
     if (this.splitEarMode) {
-      this.applyBandsToFilters(this.leftEarBands, this.nodes.leftFilters);
+      this.applyBandsToFilters(
+        this.leftEarBands, 
+        this.nodes.leftFilters,
+        this.eqEnabled && this.leftEarEnabled
+      );
     }
   }
 
@@ -429,7 +524,11 @@ export class AudioEngine {
   public applyRightEarPreset(preset: Preset): void {
     this.rightEarBands = [...preset.bands];
     if (this.splitEarMode) {
-      this.applyBandsToFilters(this.rightEarBands, this.nodes.rightFilters);
+      this.applyBandsToFilters(
+        this.rightEarBands, 
+        this.nodes.rightFilters,
+        this.eqEnabled && this.rightEarEnabled
+      );
     }
   }
 
@@ -486,6 +585,11 @@ export class AudioEngine {
         for (let i = 0; i < numPoints; i++) {
           leftMagnitudes[i] = 20 * Math.log10(tempMags[i]);
         }
+        
+        // Apply left ear enabled state
+        if (!this.leftEarEnabled) {
+          leftMagnitudes.fill(0);
+        }
       }
       
       if (this.nodes.rightFilters.length > 0) {
@@ -507,6 +611,11 @@ export class AudioEngine {
         // Convert to dB
         for (let i = 0; i < numPoints; i++) {
           rightMagnitudes[i] = 20 * Math.log10(tempMags[i]);
+        }
+        
+        // Apply right ear enabled state
+        if (!this.rightEarEnabled) {
+          rightMagnitudes.fill(0);
         }
       }
     } else {
@@ -530,6 +639,12 @@ export class AudioEngine {
         for (let i = 0; i < numPoints; i++) {
           leftMagnitudes[i] = 20 * Math.log10(tempMags[i]);
           rightMagnitudes[i] = leftMagnitudes[i];
+        }
+        
+        // Apply EQ enabled state
+        if (!this.eqEnabled) {
+          leftMagnitudes.fill(0);
+          rightMagnitudes.fill(0);
         }
       }
     }

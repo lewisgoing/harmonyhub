@@ -1,12 +1,25 @@
 "use client";
 import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { PlusCircle, MinusCircle, Volume2, VolumeX, ChevronRight, ChevronLeft, Save, AlertTriangle } from "lucide-react";
+import { 
+  PlusCircle, 
+  MinusCircle, 
+  Volume2, 
+  VolumeX, 
+  ChevronRight, 
+  ChevronLeft, 
+  Save, 
+  AlertTriangle,
+  Headphones,
+  Check,
+  Music
+} from 'lucide-react';
 
 import { CALIBRATION_STEPS, TINNITUS_TEST_FREQUENCIES, DEFAULT_FREQUENCY_BANDS } from './constants';
 import { FrequencyBand, UserPreset } from './types';
@@ -15,6 +28,13 @@ interface CalibrationWizardProps {
   onComplete: (preset: UserPreset) => void;
   onCancel: () => void;
 }
+
+// Animation variants for step transitions
+const fadeVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] } },
+  exit: { opacity: 0, y: -20, transition: { duration: 0.3 } }
+};
 
 const CalibrationWizard: React.FC<CalibrationWizardProps> = ({ onComplete, onCancel }) => {
   // Step state
@@ -31,7 +51,7 @@ const CalibrationWizard: React.FC<CalibrationWizardProps> = ({ onComplete, onCan
   const [selectedFrequencyIndex, setSelectedFrequencyIndex] = useState<number | null>(null);
   const [customFrequency, setCustomFrequency] = useState(4000); // Default to 4kHz
   
-  // Set a safer initial volume (reduced from 0.2 to 0.1)
+  // Set a safer initial volume
   const [volume, setVolume] = useState(0.1);
   
   // Add a safer max volume constant
@@ -57,6 +77,9 @@ const CalibrationWizard: React.FC<CalibrationWizardProps> = ({ onComplete, onCan
     notchDepth: -12,
     notchWidth: 0.7
   });
+  
+  // Add animated progress bar
+  const progress = ((step + 1) / totalSteps) * 100;
   
   // Initialize audio context
   useEffect(() => {
@@ -266,64 +289,122 @@ const CalibrationWizard: React.FC<CalibrationWizardProps> = ({ onComplete, onCan
       case 0: // Welcome
         return (
           <CardContent className="space-y-4">
-            <div className="flex justify-center p-4">
-              <Headphones size={64} className="text-primary" />
-            </div>
-            <p className="text-muted-foreground">
+            <motion.div 
+              className="flex justify-center p-4"
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: "spring", stiffness: 300, damping: 20 }}
+            >
+              <div className="bg-blue-50 w-24 h-24 rounded-full flex items-center justify-center">
+                <Headphones className="h-12 w-12 text-blue-500" />
+              </div>
+            </motion.div>
+            
+            <motion.p 
+              className="text-muted-foreground"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+            >
               This wizard will help identify your tinnitus frequency and create a customized EQ preset to provide relief while listening to music.
-            </p>
-            <div className="space-y-2">
+            </motion.p>
+            
+            <motion.div 
+              className="space-y-2"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+            >
               <p className="font-medium">For best results:</p>
               <ul className="list-disc pl-5 space-y-1 text-sm">
-                <li>Use headphones in a quiet environment</li>
-                <li>Set your device volume to a comfortable level</li>
-                <li>Take your time with each step</li>
+                <motion.li initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.5 }}>
+                  Use headphones in a quiet environment
+                </motion.li>
+                <motion.li initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.6 }}>
+                  Set your device volume to a comfortable level
+                </motion.li>
+                <motion.li initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.7 }}>
+                  Take your time with each step
+                </motion.li>
               </ul>
-            </div>
+            </motion.div>
           </CardContent>
         );
         
       case 1: // Frequency selection
         return (
           <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
+            <motion.p 
+              className="text-sm text-muted-foreground"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.5 }}
+            >
               Click each button to play test tones. Select the one that most closely matches your tinnitus sound.
-            </p>
+            </motion.p>
             
-            <div className="grid grid-cols-2 gap-2">
+            <motion.div 
+              className="grid grid-cols-2 gap-2"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2, duration: 0.5 }}
+            >
               {TINNITUS_TEST_FREQUENCIES.map((freq, index) => (
-                <Button
+                <motion.div
                   key={freq.frequency}
-                  variant={selectedFrequencyIndex === index ? "default" : "outline"}
-                  className="justify-start"
-                  onClick={() => handleFrequencySelect(index)}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.1 + index * 0.05 }}
+                  whileTap={{ scale: 0.97 }}
                 >
-                  <span>{freq.label}</span>
-                </Button>
+                  <Button
+                    variant={selectedFrequencyIndex === index ? "default" : "outline"}
+                    className={`justify-start w-full ${selectedFrequencyIndex === index ? 'bg-blue-500 text-white' : ''}`}
+                    onClick={() => handleFrequencySelect(index)}
+                  >
+                    <span>{freq.label}</span>
+                  </Button>
+                </motion.div>
               ))}
-            </div>
+            </motion.div>
             
-            <div className="flex items-center gap-2 pt-4">
+            <motion.div 
+              className="flex items-center gap-2 pt-4"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.6 }}
+            >
               <Button 
                 size="icon" 
-                variant="outline" 
+                variant={isPlaying ? "destructive" : "outline"}
                 onClick={toggleTone}
+                className="aspect-square w-10 h-10 rounded-full"
               >
                 {isPlaying ? <VolumeX size={16} /> : <Volume2 size={16} />}
               </Button>
               <div className="text-sm font-medium">
                 {isPlaying ? "Stop Tone" : "Play Current Tone"}
               </div>
-            </div>
+            </motion.div>
             
-            <div className="space-y-2">
+            <motion.div 
+              className="space-y-2"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.7 }}
+            >
               <Label className="flex justify-between">
                 <span>Volume</span>
                 {showVolumeWarning && (
-                  <span className="text-amber-500 text-xs flex items-center">
+                  <motion.span 
+                    className="text-amber-500 text-xs flex items-center"
+                    initial={{ scale: 0.8 }}
+                    animate={{ scale: [1, 1.1, 1] }}
+                    transition={{ repeat: 1, duration: 1 }}
+                  >
                     <AlertTriangle className="h-3 w-3 mr-1" />
                     High volume - use caution
-                  </span>
+                  </motion.span>
                 )}
               </Label>
               <Slider
@@ -332,34 +413,50 @@ const CalibrationWizard: React.FC<CalibrationWizardProps> = ({ onComplete, onCan
                 step={0.01}
                 value={[volume]}
                 onValueChange={(values) => setVolume(values[0])}
+                className="py-2"
               />
               <div className="flex justify-between text-xs">
                 <span>Quiet</span>
                 <span>Loud</span>
               </div>
-            </div>
+            </motion.div>
           </CardContent>
         );
         
       case 2: // Fine-tune frequency
         return (
           <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
+            <motion.p 
+              className="text-sm text-muted-foreground"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+            >
               Use the slider to fine-tune the exact frequency that matches your tinnitus.
-            </p>
+            </motion.p>
             
-            <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-4 rounded-md border border-blue-200">
-              <div className="text-center font-mono text-lg mb-3 font-semibold">
+            <motion.div 
+              className="bg-gradient-to-r from-blue-50 to-blue-100 p-4 rounded-xl border border-blue-200 shadow-sm"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+            >
+              <motion.div 
+                className="text-center font-mono text-lg mb-3 font-semibold text-blue-700"
+                initial={{ scale: 0.9 }}
+                animate={{ scale: 1 }}
+                key={customFrequency} // Key will force re-render when frequency changes
+              >
                 {customFrequency.toFixed(0)} Hz
-              </div>
+              </motion.div>
               
-              <div className="relative pb-8">
+              <div className="relative pb-10">
                 <Slider
                   min={125}
                   max={16000}
                   step={50}
                   value={[customFrequency]}
                   onValueChange={handleFrequencyChange}
+                  className="py-2"
                 />
                 
                 {/* Frequency scale markers */}
@@ -370,17 +467,28 @@ const CalibrationWizard: React.FC<CalibrationWizardProps> = ({ onComplete, onCan
                   <span>8 kHz</span>
                   <span>16 kHz</span>
                 </div>
-                
-                <div className="absolute bottom-0 left-0 right-0 bg-blue-50 rounded-md p-2 border border-blue-200 mt-6">
-                  <div className="text-xs text-blue-700">
-                    <span className="font-medium block mb-1">Tip:</span>
-                    Most tinnitus is between 3kHz and 8kHz. If you're unsure, try frequencies in this range.
-                  </div>
-                </div>
               </div>
-            </div>
+              
+              {/* Moved the tip outside the slider container so it doesn't block the frequency display */}
+              <motion.div 
+                className="bg-blue-50 rounded-md p-2 border border-blue-200 mb-3"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.4 }}
+              >
+                <div className="text-xs text-blue-700">
+                  <span className="font-medium block mb-1">Tip:</span>
+                  Most tinnitus is between 3kHz and 8kHz. If you're unsure, try frequencies in this range.
+                </div>
+              </motion.div>
+            </motion.div>
             
-            <div className="grid grid-cols-2 gap-2">
+            <motion.div 
+              className="grid grid-cols-2 gap-2"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.3 }}
+            >
               <div>
                 <Label>Fine Adjustment</Label>
                 <div className="flex gap-1 mt-1">
@@ -388,15 +496,19 @@ const CalibrationWizard: React.FC<CalibrationWizardProps> = ({ onComplete, onCan
                     size="sm"
                     variant="outline" 
                     onClick={() => handleFrequencyChange([customFrequency - 50])}
+                    className="rounded-full"
                   >
-                    -50 Hz
+                    <MinusCircle className="mr-1 h-3 w-3" />
+                    50 Hz
                   </Button>
                   <Button 
                     size="sm"
                     variant="outline" 
                     onClick={() => handleFrequencyChange([customFrequency - 10])}
+                    className="rounded-full"
                   >
-                    -10 Hz
+                    <MinusCircle className="mr-1 h-3 w-3" />
+                    10 Hz
                   </Button>
                 </div>
               </div>
@@ -408,38 +520,67 @@ const CalibrationWizard: React.FC<CalibrationWizardProps> = ({ onComplete, onCan
                     size="sm"
                     variant="outline" 
                     onClick={() => handleFrequencyChange([customFrequency + 10])}
+                    className="rounded-full"
                   >
-                    +10 Hz
+                    <PlusCircle className="mr-1 h-3 w-3" />
+                    10 Hz
                   </Button>
                   <Button 
                     size="sm"
                     variant="outline" 
                     onClick={() => handleFrequencyChange([customFrequency + 50])}
+                    className="rounded-full"
                   >
-                    +50 Hz
+                    <PlusCircle className="mr-1 h-3 w-3" />
+                    50 Hz
                   </Button>
                 </div>
               </div>
-            </div>
+            </motion.div>
             
-            <div className="flex items-center gap-2 pt-2">
+            <motion.div 
+              className="flex items-center gap-2 pt-2"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.5 }}
+            >
               <Button 
                 onClick={toggleTone}
                 variant={isPlaying ? "destructive" : "default"}
-                className="w-full"
+                className="w-full rounded-full"
               >
-                {isPlaying ? "Stop Tone" : "Play Test Tone"}
+                {isPlaying ? (
+                  <>
+                    <VolumeX className="mr-2 h-4 w-4" />
+                    Stop Tone
+                  </>
+                ) : (
+                  <>
+                    <Volume2 className="mr-2 h-4 w-4" />
+                    Play Test Tone
+                  </>
+                )}
               </Button>
-            </div>
+            </motion.div>
             
-            <div className="space-y-2">
+            <motion.div 
+              className="space-y-2"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.6 }}
+            >
               <Label className="flex justify-between">
                 <span>Volume</span>
                 {showVolumeWarning && (
-                  <span className="text-amber-500 text-xs flex items-center">
+                  <motion.span 
+                    className="text-amber-500 text-xs flex items-center"
+                    initial={{ scale: 0.8 }}
+                    animate={{ scale: [1, 1.1, 1] }}
+                    transition={{ repeat: 2, duration: 1 }}
+                  >
                     <AlertTriangle className="h-3 w-3 mr-1" />
                     High volume - use caution
-                  </span>
+                  </motion.span>
                 )}
               </Label>
               <Slider
@@ -448,24 +589,46 @@ const CalibrationWizard: React.FC<CalibrationWizardProps> = ({ onComplete, onCan
                 step={0.01}
                 value={[volume]}
                 onValueChange={(values) => setVolume(values[0])}
+                className="py-2"
               />
-            </div>
+            </motion.div>
           </CardContent>
         );
         
       case 3: // Create EQ preset
         return (
           <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
+            <motion.p 
+              className="text-sm text-muted-foreground"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+            >
               We'll create a notch filter at {customFrequency}Hz to provide relief from your tinnitus.
               Adjust the filter settings below.
-            </p>
+            </motion.p>
             
-            <div className="space-y-4">
-              <div className="space-y-2">
+            <motion.div 
+              className="space-y-4"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+            >
+              <motion.div 
+                className="space-y-2"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.3 }}
+              >
                 <div className="flex justify-between">
                   <Label>Notch Depth</Label>
-                  <span className="text-sm">{notchDepth} dB</span>
+                  <motion.span 
+                    className="text-sm font-mono"
+                    key={notchDepth} // Force re-render animation when value changes
+                    initial={{ scale: 0.8 }}
+                    animate={{ scale: 1 }}
+                  >
+                    {notchDepth} dB
+                  </motion.span>
                 </div>
                 <Slider
                   min={-24}
@@ -473,17 +636,30 @@ const CalibrationWizard: React.FC<CalibrationWizardProps> = ({ onComplete, onCan
                   step={1}
                   value={[notchDepth]}
                   onValueChange={(values) => setNotchDepth(values[0])}
+                  className="py-2"
                 />
                 <div className="flex justify-between text-xs">
                   <span>More Relief</span>
                   <span>Less Relief</span>
                 </div>
-              </div>
+              </motion.div>
               
-              <div className="space-y-2">
+              <motion.div 
+                className="space-y-2"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.4 }}
+              >
                 <div className="flex justify-between">
                   <Label>Notch Width</Label>
-                  <span className="text-sm">{notchWidth.toFixed(1)}</span>
+                  <motion.span 
+                    className="text-sm font-mono"
+                    key={notchWidth} // Force re-render animation when value changes
+                    initial={{ scale: 0.8 }}
+                    animate={{ scale: 1 }}
+                  >
+                    {notchWidth.toFixed(1)}
+                  </motion.span>
                 </div>
                 <Slider
                   min={0.1}
@@ -491,110 +667,211 @@ const CalibrationWizard: React.FC<CalibrationWizardProps> = ({ onComplete, onCan
                   step={0.1}
                   value={[notchWidth]}
                   onValueChange={(values) => setNotchWidth(values[0])}
+                  className="py-2"
                 />
                 <div className="flex justify-between text-xs">
                   <span>Narrow</span>
                   <span>Wide</span>
                 </div>
-              </div>
-            </div>
+              </motion.div>
+            </motion.div>
             
-            <div className="flex items-center gap-2">
+            <motion.div 
+              className="flex items-center gap-2"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.5 }}
+            >
               <Switch
                 id="test-tone"
                 checked={isPlaying}
                 onCheckedChange={toggleTone}
               />
               <Label htmlFor="test-tone">Play test tone while adjusting</Label>
-            </div>
+            </motion.div>
           </CardContent>
         );
         
       case 4: // Save preset
         return (
           <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
+            <motion.p 
+              className="text-sm text-muted-foreground"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+            >
               Name your custom preset. This will be saved for future use.
-            </p>
+            </motion.p>
             
-            <div className="space-y-2">
+            <motion.div 
+              className="space-y-2"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+            >
               <Label htmlFor="preset-name">Preset Name</Label>
               <Input
                 id="preset-name"
                 value={presetName}
                 onChange={(e) => setPresetName(e.target.value)}
                 placeholder="My Tinnitus Relief"
+                className="rounded-lg"
               />
-            </div>
+            </motion.div>
             
-            <div className="bg-muted p-3 rounded-md text-sm">
-              <h4 className="font-medium mb-1">Preset Summary:</h4>
-              <ul className="space-y-1 text-muted-foreground">
-                <li>Frequency: {customFrequency} Hz</li>
-                <li>Notch Depth: {notchDepth} dB</li>
-                <li>Notch Width: Q = {(notchWidth * 10).toFixed(1)}</li>
+            <motion.div 
+              className="bg-muted p-4 rounded-xl shadow-sm"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+            >
+              <h4 className="font-medium mb-2">Preset Summary:</h4>
+              <ul className="space-y-2 text-muted-foreground">
+                <motion.li 
+                  className="flex justify-between"
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.4 }}
+                >
+                  <span>Frequency:</span>
+                  <span className="font-mono">{customFrequency} Hz</span>
+                </motion.li>
+                <motion.li 
+                  className="flex justify-between"
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.5 }}
+                >
+                  <span>Notch Depth:</span>
+                  <span className="font-mono">{notchDepth} dB</span>
+                </motion.li>
+                <motion.li 
+                  className="flex justify-between"
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.6 }}
+                >
+                  <span>Notch Width:</span>
+                  <span className="font-mono">Q = {(notchWidth * 10).toFixed(1)}</span>
+                </motion.li>
               </ul>
-            </div>
+            </motion.div>
           </CardContent>
         );
         
       case 5: // Complete
         return (
           <CardContent className="space-y-4">
-            <div className="flex justify-center p-4">
-              <div className="rounded-full bg-green-100 p-3">
-                <CheckCircle size={48} className="text-green-600" />
+            <motion.div 
+              className="flex justify-center p-4"
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: "spring", stiffness: 300, damping: 20 }}
+            >
+              <div className="rounded-full bg-green-100 p-5 w-24 h-24 flex items-center justify-center">
+                <Check size={48} className="text-green-600" />
               </div>
-            </div>
+            </motion.div>
             
-            <p className="text-center">
+            <motion.p 
+              className="text-center text-lg font-medium"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+            >
               Your custom preset "{presetName}" has been created successfully!
-            </p>
+            </motion.p>
             
-            <p className="text-sm text-muted-foreground">
+            <motion.p 
+              className="text-sm text-muted-foreground text-center"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+            >
               You can now enjoy music with reduced tinnitus interference. Your preset will
               be available in the EQ preset list for future use.
-            </p>
+            </motion.p>
             
-            <Button 
-              className="w-full" 
-              onClick={createCustomPreset}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
             >
-              Apply Preset
-            </Button>
+              <Button 
+                className="w-full rounded-lg bg-green-600 hover:bg-green-700" 
+                onClick={createCustomPreset}
+              >
+                <Save className="mr-2 h-4 w-4" />
+                Apply Preset
+              </Button>
+            </motion.div>
           </CardContent>
         );
     }
   };
   
   return (
-    <Card className="w-full max-w-md mx-auto">
+    <Card className="overflow-hidden relative">
+      {/* Progress bar */}
+      <motion.div 
+        className="absolute top-0 left-0 h-1 bg-blue-500"
+        initial={{ width: 0 }}
+        animate={{ width: `${progress}%` }}
+        transition={{ duration: 0.5 }}
+      />
+      
       <CardHeader>
         <CardTitle>{CALIBRATION_STEPS[step].title}</CardTitle>
         <CardDescription>{CALIBRATION_STEPS[step].description}</CardDescription>
       </CardHeader>
       
-      {renderStepContent()}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={step}
+          initial="hidden"
+          animate="visible"
+          exit="exit"
+          variants={fadeVariants}
+        >
+          {renderStepContent()}
+        </motion.div>
+      </AnimatePresence>
       
       <CardFooter className="flex justify-between">
         {step > 0 ? (
-          <Button variant="outline" onClick={prevStep}>
+          <Button 
+            variant="outline" 
+            onClick={prevStep}
+            className="rounded-full"
+          >
             <ChevronLeft className="mr-2 h-4 w-4" />
             Back
           </Button>
         ) : (
-          <Button variant="outline" onClick={onCancel}>
+          <Button 
+            variant="outline" 
+            onClick={onCancel}
+            className="rounded-full"
+          >
             Cancel
           </Button>
         )}
         
         {step < totalSteps - 1 ? (
-          <Button onClick={nextStep}>
+          <Button 
+            onClick={nextStep}
+            className="rounded-full bg-blue-600 hover:bg-blue-700"
+          >
             Next
             <ChevronRight className="ml-2 h-4 w-4" />
           </Button>
         ) : (
-          <Button onClick={createCustomPreset}>
+          <Button 
+            onClick={createCustomPreset}
+            className="rounded-full bg-green-600 hover:bg-green-700"
+          >
             <Save className="mr-2 h-4 w-4" />
             Save & Apply
           </Button>
@@ -603,20 +880,5 @@ const CalibrationWizard: React.FC<CalibrationWizardProps> = ({ onComplete, onCan
     </Card>
   );
 };
-
-// Missing icons from the imports
-const Headphones = (props: any) => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <path d="M3 18v-6a9 9 0 0 1 18 0v6"></path>
-    <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"></path>
-  </svg>
-);
-
-const CheckCircle = (props: any) => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-    <polyline points="22 4 12 14.01 9 11.01"></polyline>
-  </svg>
-);
 
 export default CalibrationWizard;

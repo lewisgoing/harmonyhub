@@ -1,7 +1,7 @@
 "use client";
 
-import React from 'react';
-import { Play, Pause, SkipBack, SkipForward, Volume2, Volume1, VolumeX } from 'lucide-react';
+import React, { useEffect, useState, useRef } from 'react';
+import { Play, Pause, Volume2, Volume1, VolumeX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { PlaybackState } from './types';
@@ -15,21 +15,13 @@ interface PlayerControlsProps {
   showVolumeControl?: boolean;
 }
 
-/**
- * Format time in seconds to MM:SS format
- */
 const formatTime = (seconds: number): string => {
   if (isNaN(seconds) || !isFinite(seconds)) return '00:00';
-  
   const mins = Math.floor(seconds / 60);
   const secs = Math.floor(seconds % 60);
-  
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 };
 
-/**
- * Player Controls Component
- */
 const PlayerControls: React.FC<PlayerControlsProps> = ({
   playbackState,
   onPlayPause,
@@ -39,18 +31,51 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
   showVolumeControl = false
 }) => {
   const { isPlaying, progress, currentTime, duration, isLoaded } = playbackState;
-
-  /**
-   * Handle play button click
-   */
-  const handlePlayClick = () => {
-    // Call onPlayPause even if not loaded yet - this will trigger loading
-    onPlayPause();
+  
+  // Use a ref to track the last seen progress to avoid excessive re-renders
+  const progressRef = useRef(progress);
+  // Only use state for displayed values, not for controlling the slider
+  const [displayProgress, setDisplayProgress] = useState(progress);
+  const [isSeeking, setIsSeeking] = useState(false);
+  
+  // Throttle updates to avoid too many re-renders
+  useEffect(() => {
+    // Skip updates while user is seeking
+    if (isSeeking) return;
+    
+    // Only update if progress has changed significantly (0.5%)
+    if (Math.abs(progressRef.current - progress) > 0.5) {
+      progressRef.current = progress;
+      // Use requestAnimationFrame to batch updates and prevent too many renders
+      requestAnimationFrame(() => {
+        setDisplayProgress(progress);
+      });
+    }
+  }, [progress, isSeeking]);
+  
+  // Custom handlers for the slider
+  const handleSliderStart = () => {
+    setIsSeeking(true);
+  };
+  
+  const handleSliderEnd = (value: number[]) => {
+    // Update our ref
+    progressRef.current = value[0];
+    // Update display
+    setDisplayProgress(value[0]);
+    // Trigger actual seek
+    onSeek(value);
+    // Reset seeking state
+    setIsSeeking(false);
+  };
+  
+  // We completely bypass slider's controlled behavior while seeking
+  const handleSliderChange = (value: number[]) => {
+    if (isSeeking) {
+      setDisplayProgress(value[0]);
+    }
   };
 
-  /**
-   * Get appropriate volume icon based on current volume
-   */
   const getVolumeIcon = () => {
     if (volume === 0) return <VolumeX size={18} />;
     if (volume < 0.5) return <Volume1 size={18} />;
@@ -59,15 +84,14 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* Playback controls */}
       <div className="flex items-center justify-between">
-        <div className="w-10" /> {/* Spacer */}
+        <div className="w-10" />
         
         <Button 
           className="w-12 h-12 rounded-full bg-black text-white flex items-center justify-center hover:bg-gray-800 transition-colors"
-          onClick={handlePlayClick}
+          onClick={onPlayPause}
         >
-          {isPlaying ? <Pause size={24} /> : <Play size={24} fill="white" />}
+          {isPlaying ? <Pause size={24} fill="white" /> : <Play size={24} fill="white" />}
         </Button>
         
         {showVolumeControl && onVolumeChange && (
@@ -91,19 +115,23 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
           </div>
         )}
         
-        {!showVolumeControl && <div className="w-10" />} {/* Spacer for symmetry */}
+        {!showVolumeControl && <div className="w-10" />}
       </div>
       
-      {/* Progress bar */}
       <div className="space-y-1">
-        <Slider
-          value={[progress]}
-          min={0}
-          max={100}
-          step={0.01}
-          onValueChange={onSeek}
-          className="cursor-pointer"
-        />
+        {/* Key difference: Use a completely uncontrolled slider when seeking */}
+        <div onPointerDown={handleSliderStart}>
+          <Slider
+            defaultValue={[displayProgress]} // Use defaultValue instead of value when possible
+            value={isSeeking ? undefined : [displayProgress]} // Only use controlled value when not seeking
+            min={0}
+            max={100}
+            step={0.01}
+            onValueChange={handleSliderChange}
+            onValueCommit={handleSliderEnd}
+            className="cursor-pointer"
+          />
+        </div>
         <div className="flex justify-between text-xs text-gray-500">
           <span>{formatTime(currentTime)}</span>
           <span>{formatTime(duration)}</span>

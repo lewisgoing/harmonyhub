@@ -1,11 +1,13 @@
-import type { Metadata } from 'next'
-import './globals.css'
+import type { Metadata } from 'next';
+import './globals.css';
+import { Toaster } from '@/components/ui/toaster';
+import AuthProvider from '@/components/auth/AuthProvider';
 
 export const metadata: Metadata = {
   title: 'Hearing Heroes',
   description: 'Created for INFO Capstone',
   generator: 'hearingheroes.vercel.app',
-}
+};
 
 export default function RootLayout({
   children,
@@ -14,7 +16,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <AuthProvider>
+          {children}
+          <Toaster />
+        </AuthProvider>
+      </body>
     </html>
-  )
+  );
 }

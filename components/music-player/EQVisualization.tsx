@@ -28,11 +28,28 @@ interface EQVisualizationProps {
     channel?: 'unified' | 'left' | 'right'
   ) => void;
   
+  // NEW: Callback for frequency changes (X-axis dragging)
+  onFrequencyChange?: (
+    bandId: string,
+    newFrequency: number,
+    channel: 'unified' | 'left' | 'right'
+  ) => void;
+  
   // Visual tweaks
   height?: number;
   showFrequencyLabels?: boolean;
   showDbLabels?: boolean;
   interactive?: boolean;
+  
+  // Drag constraints
+  minFreq?: number;
+  maxFreq?: number;
+  minGain?: number;
+  maxGain?: number;
+  
+  // NEW: Allow or disallow X/Y dragging
+  allowXDragging?: boolean;
+  allowYDragging?: boolean;
 }
 
 // Visual constants
@@ -89,6 +106,17 @@ const yToGain = (y: number, height: number): number => {
 };
 
 /**
+ * Round to nearest frequency increment for smoother experience
+ */
+const roundFrequency = (freq: number): number => {
+  if (freq < 100) return Math.round(freq / 5) * 5;
+  if (freq < 1000) return Math.round(freq / 10) * 10;
+  if (freq < 4000) return Math.round(freq / 50) * 50;
+  if (freq < 10000) return Math.round(freq / 100) * 100;
+  return Math.round(freq / 500) * 500;
+};
+
+/**
  * EQ Visualization Component
  */
 const EQVisualization: React.FC<EQVisualizationProps> = ({
@@ -99,10 +127,17 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
   rightEarBands,
   frequencyResponseData,
   onBandChange,
+  onFrequencyChange,
   height = 160,
   showFrequencyLabels = true,
   showDbLabels = true,
-  interactive = true
+  interactive = true,
+  minFreq = 60,
+  maxFreq = 16000,
+  minGain = -12,
+  maxGain = 12,
+  allowXDragging = true,
+  allowYDragging = true
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -113,6 +148,10 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
     channel: 'unified' | 'left' | 'right';
     initialX: number;
     initialY: number;
+    initialFreq: number;
+    initialGain: number;
+    isDraggingX: boolean;
+    isDraggingY: boolean;
   } | null>(null);
   
   // Track the point that's currently hovered over
@@ -144,6 +183,9 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
       resizeObserver.observe(containerRef.current);
     }
     
+    // Initial resize
+    resizeCanvas();
+    
     return () => {
       resizeObserver.disconnect();
     };
@@ -154,9 +196,14 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
    */
   const resizeCanvas = () => {
     if (canvasRef.current && containerRef.current) {
-      const { width } = containerRef.current.getBoundingClientRect();
-      canvasRef.current.width = width;
-      canvasRef.current.height = height;
+      const rect = containerRef.current.getBoundingClientRect();
+      const padding = 4; // Account for padding in container
+      
+      // Set canvas size to fit within the container
+      canvasRef.current.width = rect.width - padding * 2;
+      canvasRef.current.height = height - padding * 2;
+      
+      // Redraw after resize
       drawEQCurve();
     }
   };
@@ -517,26 +564,72 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
     
     // If active, show frequency and gain
     if (isActive && canvasRef.current) {
-      const canvas = canvasRef.current;
-      const rect = canvas.getBoundingClientRect();
-      
       // Show tooltip with frequency and gain
-      const tooltip = document.createElement('div');
-      tooltip.className = 'absolute z-10 bg-black/80 text-white text-xs rounded px-2 py-1';
-      tooltip.style.left = `${rect.left + x}px`;
-      tooltip.style.top = `${rect.top + y - 30}px`;
-      tooltip.style.transform = 'translateX(-50%)';
-      tooltip.textContent = `${band.frequency.toFixed(0)} Hz: ${band.gain.toFixed(1)} dB`;
+      showTooltip(band.frequency, band.gain, x, y);
       
-      // Remove any existing tooltips
-      document.querySelectorAll('.eq-tooltip').forEach(el => el.remove());
-      
-      // Add class for easier removal
-      tooltip.classList.add('eq-tooltip');
-      
-      // Add to document
-      document.body.appendChild(tooltip);
+      // Draw direction indicators if we're allowing XY dragging
+      if (allowXDragging && allowYDragging) {
+        // Draw crosshair indicators
+        ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        
+        // Horizontal line
+        ctx.moveTo(x - radius * 2, y);
+        ctx.lineTo(x + radius * 2, y);
+        
+        // Vertical line
+        ctx.moveTo(x, y - radius * 2);
+        ctx.lineTo(x, y + radius * 2);
+        
+        ctx.stroke();
+      } else if (allowXDragging) {
+        // Draw horizontal arrow indicators
+        ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        
+        // Horizontal line
+        ctx.moveTo(x - radius * 2, y);
+        ctx.lineTo(x + radius * 2, y);
+        
+        ctx.stroke();
+      } else if (allowYDragging) {
+        // Draw vertical arrow indicators
+        ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        
+        // Vertical line
+        ctx.moveTo(x, y - radius * 2);
+        ctx.lineTo(x, y + radius * 2);
+        
+        ctx.stroke();
+      }
     }
+  };
+
+  /**
+   * Show tooltip with frequency and gain information
+   */
+  const showTooltip = (frequency: number, gain: number, x: number, y: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    
+    // Remove any existing tooltips
+    document.querySelectorAll('.eq-tooltip').forEach(el => el.remove());
+    
+    const tooltip = document.createElement('div');
+    tooltip.className = 'absolute z-10 bg-black/80 text-white text-xs rounded px-2 py-1 eq-tooltip';
+    tooltip.style.left = `${rect.left + x}px`;
+    tooltip.style.top = `${rect.top + y - 30}px`;
+    tooltip.style.transform = 'translateX(-50%)';
+    tooltip.textContent = `${frequency.toFixed(0)} Hz: ${gain.toFixed(1)} dB`;
+    
+    // Add to document
+    document.body.appendChild(tooltip);
   };
 
   /**
@@ -572,12 +665,45 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
     // Find the closest point
     const point = findClosestPoint(x, y);
     if (point) {
+      // Get initial values for the point
+      let initialFreq = 0;
+      let initialGain = 0;
+      
+      if (point.channel === 'unified') {
+        const band = unifiedBands.find(b => b.id === point.bandId);
+        if (band) {
+          initialFreq = band.frequency;
+          initialGain = band.gain;
+        }
+      } else if (point.channel === 'left') {
+        const band = leftEarBands.find(b => b.id === point.bandId);
+        if (band) {
+          initialFreq = band.frequency;
+          initialGain = band.gain;
+        }
+      } else if (point.channel === 'right') {
+        const band = rightEarBands.find(b => b.id === point.bandId);
+        if (band) {
+          initialFreq = band.frequency;
+          initialGain = band.gain;
+        }
+      }
+      
       setDraggedPoint({
         bandId: point.bandId,
         channel: point.channel,
         initialX: x,
-        initialY: y
+        initialY: y,
+        initialFreq,
+        initialGain,
+        isDraggingX: allowXDragging,
+        isDraggingY: allowYDragging
       });
+      
+      // Detect if we should be only dragging in one direction (if both are allowed)
+      if (allowXDragging && allowYDragging) {
+        // We'll determine the primary drag direction on first movement
+      }
       
       // Prevent text selection during drag
       e.preventDefault();
@@ -596,19 +722,66 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
     const y = e.clientY - rect.top;
     
     if (draggedPoint) {
-      // We're dragging a point - update its position
-      const newGain = yToGain(y, canvas.height);
+      // We're dragging a point
       
-      // Clamp gain to reasonable range
-      const clampedGain = Math.max(Math.min(newGain, DB_RANGE/2), -DB_RANGE/2);
+      // Calculate new values based on drag direction
+      if (!draggedPoint.isDraggingX && !draggedPoint.isDraggingY) {
+        // If neither direction is set yet, determine based on initial movement
+        const deltaX = Math.abs(x - draggedPoint.initialX);
+        const deltaY = Math.abs(y - draggedPoint.initialY);
+        
+        // Set the direction that has more movement
+        if (deltaX > deltaY && allowXDragging) {
+          setDraggedPoint(prev => prev ? { ...prev, isDraggingX: true, isDraggingY: false } : null);
+        } else if (deltaY >= deltaX && allowYDragging) {
+          setDraggedPoint(prev => prev ? { ...prev, isDraggingX: false, isDraggingY: true } : null);
+        }
+        
+        // Return early until direction is determined
+        return;
+      }
       
-      // Call the callback
-      onBandChange(
-        draggedPoint.bandId,
-        clampedGain,
-        undefined,
-        draggedPoint.channel
-      );
+      // Calculate new values based on drag direction
+      let newGain = draggedPoint.initialGain;
+      let newFrequency = draggedPoint.initialFreq;
+      
+      // Update gain (Y position) if Y dragging is enabled
+      if (draggedPoint.isDraggingY && allowYDragging) {
+        newGain = yToGain(y, canvas.height);
+        
+        // Clamp gain to reasonable range
+        newGain = Math.max(Math.min(newGain, maxGain), minGain);
+        
+        // Call the callback for gain change
+        onBandChange(
+          draggedPoint.bandId,
+          newGain,
+          undefined,
+          draggedPoint.channel
+        );
+      }
+      
+      // Update frequency (X position) if X dragging is enabled
+      if (draggedPoint.isDraggingX && allowXDragging && onFrequencyChange) {
+        newFrequency = xToFreq(x, canvas.width);
+        
+        // Clamp frequency to reasonable range
+        newFrequency = Math.max(Math.min(newFrequency, maxFreq), minFreq);
+        
+        // Round frequency to nearest increment
+        newFrequency = roundFrequency(newFrequency);
+        
+        // Call the callback for frequency change
+        onFrequencyChange(
+          draggedPoint.bandId,
+          newFrequency,
+          draggedPoint.channel
+        );
+      }
+      
+      // Update tooltip to show current values
+      showTooltip(newFrequency, newGain, x, y);
+      
     } else {
       // Just hovering - find the closest point
       const point = findClosestPoint(x, y);
@@ -690,21 +863,47 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
     return closestPoint;
   };
 
+  // Update cursor when hover state changes
+  useEffect(() => {
+    if (!canvasRef.current) return;
+    
+    if (hoveredPoint) {
+      canvasRef.current.style.cursor = "pointer";
+    } else {
+      canvasRef.current.style.cursor = "default";
+    }
+  }, [hoveredPoint]);
+
+  // Update cursor when drag state changes
+  useEffect(() => {
+    if (!canvasRef.current || !draggedPoint) return;
+    
+    if (draggedPoint.isDraggingX && !draggedPoint.isDraggingY) {
+      canvasRef.current.style.cursor = "ew-resize"; // Horizontal resize cursor
+    } else if (!draggedPoint.isDraggingX && draggedPoint.isDraggingY) {
+      canvasRef.current.style.cursor = "ns-resize"; // Vertical resize cursor
+    } else if (draggedPoint.isDraggingX && draggedPoint.isDraggingY) {
+      canvasRef.current.style.cursor = "move"; // Move cursor (both directions)
+    }
+  }, [draggedPoint]);
+
   return (
     <div 
       ref={containerRef} 
-      className="relative w-full h-full border border-gray-200 rounded-md p-2"
+      className="relative w-full h-full border border-gray-200 rounded-md overflow-hidden"
       style={{ height }}
     >
-      <canvas
-        ref={canvasRef}
-        className={interactive && isEQEnabled ? "cursor-grab" : "cursor-default"}
-        height={height}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseLeave}
-      />
+      <div className="p-2 w-full h-full">
+        <canvas
+          ref={canvasRef}
+          style={{ display: "block" }} // Prevent extra space below canvas
+          height={height - 4} // Account for container padding
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseLeave}
+        />
+      </div>
     </div>
   );
 };

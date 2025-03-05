@@ -1,7 +1,8 @@
 "use client";
 
-// Main components
-export { default as MusicPlayer } from './PlayerContainer';
+// Export PlayerContainer as the default export
+import PlayerContainer from './PlayerContainer';
+export default PlayerContainer;
 
 // Sub-components (for custom usage)
 export { default as EQVisualization } from './EQVisualization';

@@ -493,7 +493,6 @@ const handleBandChange = (
     ));
   }
 };
-
   /**
    * Handle frequency change for a band
    */

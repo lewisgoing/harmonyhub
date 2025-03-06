@@ -9,7 +9,11 @@ import { X } from 'lucide-react';
 interface EQVisualizationProps {
   // EQ state
   isEQEnabled: boolean;
+  maxQValue?: 10 | 20 | 30;
   isSplitEarMode: boolean;
+
+  leftEarEnabled?: boolean;  
+  rightEarEnabled?: boolean;
   
   // Band data
   unifiedBands: FrequencyBand[];
@@ -170,9 +174,12 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
   unifiedBands,
   leftEarBands,
   rightEarBands,
+  leftEarEnabled = true,  // Add default value
+  rightEarEnabled = true, // Add default value
   frequencyResponseData,
   onBandChange,
   onFrequencyChange,
+  maxQValue = 30,
   height = 160,
   showFrequencyLabels = true,
   showDbLabels = true,
@@ -228,6 +235,22 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
     frequencyResponseData,
     height
   ]);
+
+  useEffect(() => {
+    if (!canvasRef.current) return;
+    
+    if (hoveredPoint) {
+      // Check if the hovered point is on a disabled ear
+      if ((hoveredPoint.channel === 'left' && !leftEarEnabled) || 
+          (hoveredPoint.channel === 'right' && !rightEarEnabled)) {
+        canvasRef.current.style.cursor = "not-allowed";
+      } else {
+        canvasRef.current.style.cursor = "pointer";
+      }
+    } else {
+      canvasRef.current.style.cursor = "default";
+    }
+  }, [hoveredPoint, leftEarEnabled, rightEarEnabled]);
   
   // Resize canvas when container size changes
   useEffect(() => {
@@ -288,11 +311,11 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
     
     // Always draw smooth curves first, whether frequency response data is available or not
     if (isSplitEarMode) {
-      // Draw left ear curve
-      drawBandCurve(ctx, leftEarBands, LEFT_EAR_COLOR, width, height);
+      // Draw left ear curve with correct disabled state
+      drawBandCurve(ctx, leftEarBands, LEFT_EAR_COLOR, width, height, !leftEarEnabled);
       
-      // Draw right ear curve
-      drawBandCurve(ctx, rightEarBands, RIGHT_EAR_COLOR, width, height);
+      // Draw right ear curve with correct disabled state
+      drawBandCurve(ctx, rightEarBands, RIGHT_EAR_COLOR, width, height, !rightEarEnabled);
       
       // Add a legend
       drawLegend(ctx, width, height);
@@ -400,14 +423,15 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
     bands: FrequencyBand[],
     color: string,
     width: number,
-    height: number
+    height: number,
+    isEarDisabled: boolean = false
   ) => {
     // Set up curve style
     ctx.strokeStyle = color;
     ctx.lineWidth = 3;
     
-    // If EQ is disabled, reduce opacity
-    if (!isEQEnabled) {
+    // If EQ is disabled or this specific ear is disabled, reduce opacity
+    if (!isEQEnabled || isEarDisabled) {
       ctx.globalAlpha = DISABLED_OPACITY;
     } else {
       ctx.globalAlpha = 1.0;
@@ -422,7 +446,7 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
       ctx.globalAlpha = 1.0;
       return;
     }
-    
+
     // Generate interpolated points for a smoother curve
     // This ensures we have a proper curve even before audio context is initialized
     const points: {x: number, y: number}[] = [];
@@ -472,7 +496,7 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
       }
       
       // Apply smoothing with cubic easing
-      factor = smoothFactor(factor);
+      factor = smoothFactor(factor, (lowerBand.Q + upperBand.Q) / 2);
       
       // Interpolate the gain
       const gain = lowerBand.gain + factor * (upperBand.gain - lowerBand.gain);
@@ -522,10 +546,11 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
     ctx.globalAlpha = 1.0;
   };
 
-  const smoothFactor = (t: number): number => {
-    // Cubic easing function: t^3
-    return t * t * (3 - 2 * t);
-  }
+  const smoothFactor = (t: number, Q: number = 1.0): number => {
+    // Adjust the curve based on Q value - higher Q means sharper transitions
+    const sharpness = Math.min(Q / 10, 2); // Normalize Q to a reasonable range
+    return t ** (1 + sharpness);
+  };
   
   // Update drawEQCurve function to use the improved curves
 
@@ -622,7 +647,8 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
         
         drawBandPoint(
           ctx, band, LEFT_EAR_COLOR, width, height, 
-          isHovered || isDragged, 'left'
+          isHovered || isDragged, 'left', 
+          !leftEarEnabled // Pass the disabled state
         );
       });
       
@@ -635,11 +661,11 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
         
         drawBandPoint(
           ctx, band, RIGHT_EAR_COLOR, width, height, 
-          isHovered || isDragged, 'right'
+          isHovered || isDragged, 'right',
+          !rightEarEnabled // Pass the disabled state
         );
       });
-    } else {
-      // Draw unified points
+    } else {      // Draw unified points
       unifiedBands.forEach(band => {
         const isHovered = hoveredPoint?.bandId === band.id && 
                           hoveredPoint?.channel === 'unified';
@@ -657,27 +683,27 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
   /**
    * Draw a single band point
    */
-  const drawBandPoint = (
-    ctx: CanvasRenderingContext2D,
-    band: FrequencyBand,
-    color: string,
-    width: number,
-    height: number,
-    isActive: boolean,
-    channel: 'unified' | 'left' | 'right'
-  ) => {
-    const x = freqToX(band.frequency, width);
-    const y = gainToY(band.gain, height);
-    const radius = isActive ? ACTIVE_POINT_RADIUS : POINT_RADIUS;
-    
-    // If EQ is disabled, reduce opacity
-    if (!isEQEnabled) {
-      ctx.globalAlpha = DISABLED_OPACITY;
-    } else {
-      ctx.globalAlpha = 1.0;
-    }
-    
-    // Draw point
+const drawBandPoint = (
+  ctx: CanvasRenderingContext2D,
+  band: FrequencyBand,
+  color: string,
+  width: number,
+  height: number,
+  isActive: boolean,
+  channel: 'unified' | 'left' | 'right',
+  isEarDisabled: boolean = false // Add this parameter
+) => {
+  const x = freqToX(band.frequency, width);
+  const y = gainToY(band.gain, height);
+  const radius = isActive ? ACTIVE_POINT_RADIUS : POINT_RADIUS;
+  
+  // If EQ is disabled or this specific ear is disabled, reduce opacity
+  if (!isEQEnabled || isEarDisabled) {
+    ctx.globalAlpha = DISABLED_OPACITY;
+  } else {
+    ctx.globalAlpha = 1.0;
+  }
+      // Draw point
     ctx.fillStyle = color;
     ctx.beginPath();
     ctx.arc(x, y, radius, 0, Math.PI * 2);
@@ -692,23 +718,26 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
     
     // If this point is selected for Q adjustment, draw Q indicator
     if (isAdjustingQ && 
-        selectedBandForQ && 
-        selectedBandForQ.bandId === band.id && 
-        selectedBandForQ.channel === channel) {
-      // Draw an outer ring to indicate Q adjustment mode
-      ctx.strokeStyle = 'yellow';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.arc(x, y, radius + 4, 0, Math.PI * 2);
-      ctx.stroke();
-      
-      // Draw a "Q" indicator
-      ctx.fillStyle = 'yellow';
-      ctx.font = 'bold 10px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('Q', x, y - radius - 8);
-    }
+      selectedBandForQ && 
+      selectedBandForQ.bandId === band.id && 
+      selectedBandForQ.channel === channel) {
+    // Draw an outer ring to indicate Q adjustment mode
+    ctx.strokeStyle = 'yellow';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    
+    // The radius of the ring should vary with Q value to give visual feedback
+    const qIndicatorSize = Math.min(radius * (1 + band.Q / 10), radius * 3);
+    ctx.arc(x, y, qIndicatorSize, 0, Math.PI * 2);
+    ctx.stroke();
+    
+    // Draw a "Q" indicator with value
+    ctx.fillStyle = 'yellow';
+    ctx.font = 'bold 10px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`Q: ${band.Q.toFixed(1)}`, x, y - qIndicatorSize - 5);
+  }
     
     // Reset opacity
     ctx.globalAlpha = 1.0;
@@ -864,10 +893,17 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
     // Call the parent's onBandChange with the new Q value
     onBandChange(
       selectedBandForQ.bandId,
-      undefined, // Now this will work with the updated type
+      undefined,
       value,
       selectedBandForQ.channel
     );
+    
+    // Request a frequency response update immediately
+    // This is important for visual feedback
+    requestAnimationFrame(() => {
+      // Force redraw
+      drawEQCurve();
+    });
   };
   /**
    * Helper function to get the current Q value
@@ -900,6 +936,12 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
     // Find the closest point
     const point = findClosestPoint(x, y);
     if (point) {
+      // Check if this ear is enabled before allowing interaction
+      if ((point.channel === 'left' && !leftEarEnabled) || 
+          (point.channel === 'right' && !rightEarEnabled)) {
+        return; // Block interaction for disabled ears
+      }
+      
       const now = Date.now();
       const isDoubleClick = (now - lastClickTime) < 300; // 300ms threshold for double-click
       setLastClickTime(now);
@@ -1049,12 +1091,27 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
   /**
    * Handle mouse up event
    */
-  const handleMouseUp = () => {
-    setDraggedPoint(null);
+const handleMouseUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  // If we were dragging a point, check if we should still hover it
+  if (draggedPoint && canvasRef.current) {
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
     
-    // Remove any tooltips
-    document.querySelectorAll('.eq-tooltip').forEach(el => el.remove());
-  };
+    // Find if we're still hovering over a point
+    const point = findClosestPoint(x, y);
+    
+    // Update hover state
+    setHoveredPoint(point);
+  }
+  
+  // Clear drag state
+  setDraggedPoint(null);
+  
+  // Remove any tooltips
+  document.querySelectorAll('.eq-tooltip').forEach(el => el.remove());
+};
 
   /**
    * Handle mouse leave event
@@ -1107,11 +1164,15 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
     };
     
     if (isSplitEarMode) {
-      // Check left ear bands
-      leftEarBands.forEach(band => checkBand(band, 'left'));
+      // Only check left ear bands if left ear is enabled
+      if (leftEarEnabled) {
+        leftEarBands.forEach(band => checkBand(band, 'left'));
+      }
       
-      // Check right ear bands
-      rightEarBands.forEach(band => checkBand(band, 'right'));
+      // Only check right ear bands if right ear is enabled
+      if (rightEarEnabled) {
+        rightEarBands.forEach(band => checkBand(band, 'right'));
+      }
     } else {
       // Check unified bands
       unifiedBands.forEach(band => checkBand(band, 'unified'));
@@ -1151,9 +1212,7 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
       style={{ height }}
     >
       {/* Instructions for Q adjustment */}
-      <div className="absolute top-2 right-2 text-xs text-gray-500 bg-white/80 px-2 py-1 rounded z-10">
-        Double-click point to adjust Q
-      </div>
+
       
       <div className="p-2 w-full h-full">
         <canvas
@@ -1172,13 +1231,13 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
         <div className="absolute bottom-0 left-0 right-0 bg-black/80 text-white p-2 flex items-center gap-2">
           <span className="text-xs whitespace-nowrap">Q Value:</span>
           <Slider
-            min={0.1}
-            max={10}
-            step={0.1}
-            value={[getBandQ(selectedBandForQ.bandId, selectedBandForQ.channel)]}
-            onValueChange={(values) => handleQChange(values[0])}
-            className="flex-1"
-          />
+  min={0.1}
+  max={maxQValue || 30} // Use the prop or default to 20
+  step={0.1}
+  value={[getBandQ(selectedBandForQ.bandId, selectedBandForQ.channel)]}
+  onValueChange={(values) => handleQChange(values[0])}
+  className="flex-1"
+/>
           <span className="text-xs font-mono">{getBandQ(selectedBandForQ.bandId, selectedBandForQ.channel).toFixed(1)}</span>
           <Button 
             size="sm" 
@@ -1193,7 +1252,9 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
           </Button>
         </div>
       )}
+      
     </div>
+
   );
 };
 

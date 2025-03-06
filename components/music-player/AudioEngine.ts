@@ -443,7 +443,13 @@ private debounce(func: Function, wait: number, key: string): void {
         // Apply Q change with a smooth ramp
         filter.Q.cancelScheduledValues(currentTime);
         filter.Q.setValueAtTime(filter.Q.value, currentTime);
+
+        const scaledQ = band.Q > 10 ? 10 + (band.Q - 10) * 0.5 : band.Q;
+
+        
         filter.Q.linearRampToValueAtTime(band.Q, currentTime + rampTime);
+
+        
       }
     });
   }
@@ -451,28 +457,29 @@ private debounce(func: Function, wait: number, key: string): void {
   /**
  * Approximate frequency response from bands when WebAudio API is not available
  */
-private approximateResponse(
-  frequencies: Float32Array,
-  magnitudes: Float32Array,
-  bands: FrequencyBand[]
-): void {
-  // For each frequency point
-  for (let i = 0; i < frequencies.length; i++) {
-    const freq = frequencies[i];
-    let totalGain = 0;
-    
-    // Sum the contribution of each band
-    for (const band of bands) {
-      // Simple approximation of a peaking filter response
-      const normalizedFreq = Math.log(freq / band.frequency);
-      const response = band.gain * Math.exp(-normalizedFreq * normalizedFreq * band.Q);
-      totalGain += response;
+  private approximateResponse(
+    frequencies: Float32Array,
+    magnitudes: Float32Array,
+    bands: FrequencyBand[]
+  ): void {
+    // For each frequency point
+    for (let i = 0; i < frequencies.length; i++) {
+      const freq = frequencies[i];
+      let totalGain = 0;
+      
+      // Sum the contribution of each band
+      for (const band of bands) {
+        // Improved approximation of a peaking filter response with better Q handling
+        const normalizedFreq = Math.log(freq / band.frequency);
+        // Adjust this formula to better handle higher Q values
+        const response = band.gain * Math.exp(-normalizedFreq * normalizedFreq * (band.Q * 0.5));
+        totalGain += response;
+      }
+      
+      // Apply the total gain
+      magnitudes[i] = this.eqEnabled ? totalGain : 0;
     }
-    
-    // Apply the total gain
-    magnitudes[i] = this.eqEnabled ? totalGain : 0;
   }
-}
 
   /**
    * Set whether EQ is enabled

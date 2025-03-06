@@ -1,6 +1,6 @@
 "use client";
 
-import { CloudOff, Check, Cloud, CloudSun } from 'lucide-react';
+import { CloudOff, Check, Cloud, CloudUpload } from 'lucide-react';
 import { useAuthContext } from '@/components/auth/AuthProvider';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/router';
@@ -32,7 +32,7 @@ export default function CloudStatus() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ type: "spring", stiffness: 300, damping: 20 }}
             >
-              <CloudSun className="h-3 w-3" />
+              <CloudUpload className="h-3 w-3" />
               <span>Synced</span>
             </motion.div>
           </TooltipTrigger>

@@ -89,13 +89,12 @@ const PlayerContainer: React.FC = () => {
   });
 
   
-
+  const [maxQValue, setMaxQValue] = useState<10 | 20 | 30>(20); 
   // Frequency bands for EQ
   const [unifiedBands, setUnifiedBands] = useState<FrequencyBand[]>([...DEFAULT_FREQUENCY_BANDS]);
   const [leftEarBands, setLeftEarBands] = useState<FrequencyBand[]>([...DEFAULT_FREQUENCY_BANDS]);
   const [rightEarBands, setRightEarBands] = useState<FrequencyBand[]>([...DEFAULT_FREQUENCY_BANDS]);
-
-  // Calibration state
+    // Calibration state
   const [isCalibrationOpen, setIsCalibrationOpen] = useState(false);
   const [newPresetDescription, setNewPresetDescription] = useState('Custom user preset');
   
@@ -158,68 +157,127 @@ const PlayerContainer: React.FC = () => {
     leftMagnitudes: Float32Array;
     rightMagnitudes: Float32Array;
   } | undefined>(undefined);
-  
-  // Always load from localStorage first, then optionally enhance with Firebase data if signed in
+
   useEffect(() => {
     const loadSettings = async () => {
-      // Always load local settings first
-      loadSettingsFromLocalStorage();
+      // Only load state of EQ enable/disable and split mode from localStorage
+      try {
+        const playbackSettingsJSON = localStorage.getItem(STORAGE_KEYS.PLAYBACK_SETTINGS);
+        if (playbackSettingsJSON) {
+          const settings = JSON.parse(playbackSettingsJSON);
+          setIsEQEnabled(settings.isEQEnabled ?? true);
+          setIsSplitEarMode(settings.isSplitEarMode ?? false);
+          
+          // Load individual ear EQ states
+          if (settings.leftEQEnabled !== undefined) {
+            setLeftEQEnabled(settings.leftEQEnabled);
+          }
+          
+          if (settings.rightEQEnabled !== undefined) {
+            setRightEQEnabled(settings.rightEQEnabled);
+          }
+          
+          // Load volume
+          if (settings.volume !== undefined) {
+            setVolume(settings.volume);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load settings from localStorage:', error);
+      }
       
-      // If user is signed in, try to load cloud settings
+      // If user is signed in, only load minimal cloud settings
       if (user) {
         try {
-          // Load cloud settings if available
           const settings = await getPlaybackSettings(user.uid);
-          
           if (settings) {
-            // Apply settings from Firestore
             setIsEQEnabled(settings.isEQEnabled ?? true);
             setIsSplitEarMode(settings.isSplitEarMode ?? false);
-            
-            if (settings.splitEarConfig) {
-              setSplitEarConfig(settings.splitEarConfig);
-              
-              // Load left ear preset
-              const leftPreset = getPresetById(settings.splitEarConfig.leftEarPreset);
-              if (leftPreset) {
-                setLeftEarBands([...leftPreset.bands]);
-              }
-              
-              // Load right ear preset
-              const rightPreset = getPresetById(settings.splitEarConfig.rightEarPreset);
-              if (rightPreset) {
-                setRightEarBands([...rightPreset.bands]);
-              }
-            }
-            
-            // Set last preset
-            if (settings.lastPresetId) {
-              const preset = getPresetById(settings.lastPresetId);
-              if (preset) {
-                setUnifiedPresetId(preset.id);
-                setUnifiedBands([...preset.bands]);
-              }
-            }
             
             // Set volume if available
             if (settings.volume !== undefined) {
               setVolume(settings.volume);
             }
-            
-            toast({
-              title: "Settings loaded",
-              description: "Your settings have been loaded from the cloud.",
-            });
           }
         } catch (error) {
           console.error('Failed to load user settings from Firestore:', error);
-          // No need to show error toast - local settings are already loaded
         }
       }
     };
     
     loadSettings();
   }, [user]);
+  
+  // Always load from localStorage first, then optionally enhance with Firebase data if signed in
+  // useEffect(() => {
+  //   const loadSettings = async () => {
+  //     // Always load local settings first
+  //     loadSettingsFromLocalStorage();
+      
+  //     // If user is signed in, try to load cloud settings
+  //     if (user) {
+  //       try {
+  //         // Load cloud settings if available
+  //         const settings = await getPlaybackSettings(user.uid);
+          
+  //         if (settings) {
+  //           // Apply settings from Firestore
+  //           setIsEQEnabled(settings.isEQEnabled ?? true);
+  //           setIsSplitEarMode(settings.isSplitEarMode ?? false);
+            
+  //           if (settings.splitEarConfig) {
+  //             setSplitEarConfig(settings.splitEarConfig);
+              
+  //             // Load left ear preset
+  //             const leftPreset = getPresetById(settings.splitEarConfig.leftEarPreset);
+  //             if (leftPreset) {
+  //               setLeftEarBands([...leftPreset.bands]);
+  //             }
+              
+  //             // Load right ear preset
+  //             const rightPreset = getPresetById(settings.splitEarConfig.rightEarPreset);
+  //             if (rightPreset) {
+  //               setRightEarBands([...rightPreset.bands]);
+  //             }
+  //           }
+            
+  //           // Set last preset
+  //           if (settings.lastPresetId) {
+  //             const preset = getPresetById(settings.lastPresetId);
+  //             if (preset) {
+  //               setUnifiedPresetId(preset.id);
+  //               setUnifiedBands([...preset.bands]);
+  //             }
+  //           }
+            
+  //           // Set volume if available
+  //           if (settings.volume !== undefined) {
+  //             setVolume(settings.volume);
+  //           }
+            
+  //           toast({
+  //             title: "Settings loaded",
+  //             description: "Your settings have been loaded from the cloud.",
+  //           });
+  //         }
+  //       } catch (error) {
+  //         console.error('Failed to load user settings from Firestore:', error);
+  //         // No need to show error toast - local settings are already loaded
+  //       }
+  //     }
+  //   };
+    
+  //   loadSettings();
+  // }, [user]);
+
+  useEffect(() => {
+    if (audioEngine) {
+      const flatPreset = presets.flat;
+      audioEngine.applyUnifiedPreset(flatPreset);
+      audioEngine.applyLeftEarPreset(flatPreset);
+      audioEngine.applyRightEarPreset(flatPreset);
+    }
+  }, [audioEngine]);
 
   // Load from localStorage (for non-authenticated users or as fallback)
   const loadSettingsFromLocalStorage = () => {
@@ -495,13 +553,23 @@ const PlayerContainer: React.FC = () => {
 /**
  * Update a single frequency band
  */
+/**
+ * Update a single frequency band
+ */
 const handleBandChange = (
   bandId: string,
-  newGain?: number, // Make newGain optional
+  newGain?: number,
   newQ?: number,
   channel: 'unified' | 'left' | 'right' = 'unified'
 ) => {
-  // Handle different channels
+  // Prevent changes to disabled ears
+  if ((channel === 'left' && !leftEQEnabled) || 
+      (channel === 'right' && !rightEQEnabled) ||
+      !isEQEnabled) {
+    return;
+  }
+  
+  // Handle different channels...
   if (channel === 'unified') {
     setUnifiedBands(prev => prev.map(band => 
       band.id === bandId 
@@ -539,6 +607,12 @@ const handleBandChange = (
     newFrequency: number,
     channel: 'unified' | 'left' | 'right'
   ) => {
+    // Prevent changes to disabled ears
+    if ((channel === 'left' && !leftEQEnabled) || 
+        (channel === 'right' && !rightEQEnabled) ||
+        !isEQEnabled) {
+      return;
+    }
     // Handle different channels
     if (channel === 'unified') {
       setUnifiedBands(prev => prev.map(band => 
@@ -780,7 +854,31 @@ const handleCalibrationComplete = async (preset: UserPreset) => {
         </div>
         
         {/* External audio button in top left */}
-        <div className="absolute top-4 left-4 z-10">
+
+        {/* External audio button in top left */}
+<div className="absolute top-4 left-4 z-10">
+  <TooltipProvider>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button 
+          variant="ghost" 
+          size="icon"
+          className="rounded-full bg-black/30 text-white hover:bg-white/80"
+          onClick={() => toast({
+            title: "Coming Soon!",
+            description: "Custom audio source support is coming in our next update.",
+          })}
+        >
+          <Music size={16} />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>
+        <p>Custom audio sources (Coming Soon)</p>
+      </TooltipContent>
+    </Tooltip>
+  </TooltipProvider>
+</div>
+        {/* <div className="absolute top-4 left-4 z-10">
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -799,7 +897,7 @@ const handleCalibrationComplete = async (preset: UserPreset) => {
             </Tooltip>
           </TooltipProvider>
         </div>
-        
+         */}
         {/* Album cover */}
         <div className="absolute top-4 left-4 w-36 h-36 rounded-lg overflow-hidden shadow-lg mt-10">
           <img 
@@ -832,20 +930,20 @@ const handleCalibrationComplete = async (preset: UserPreset) => {
           <div className="relative">
             {/* EQ visualization */}
             <EQVisualization 
-              isEQEnabled={isEQEnabled}
-              isSplitEarMode={isSplitEarMode}
-              unifiedBands={unifiedBands}
-              leftEarBands={leftEarBands}
-              rightEarBands={rightEarBands}
-              leftEarEnabled={leftEQEnabled}
-              rightEarEnabled={rightEQEnabled}
-              frequencyResponseData={frequencyResponseData}
-              onBandChange={handleBandChange}
-              onFrequencyChange={handleFrequencyChange}
-              height={140}
-              allowXDragging={true}
-              allowYDragging={true}
-            />
+  isEQEnabled={isEQEnabled}
+  isSplitEarMode={isSplitEarMode}
+  unifiedBands={unifiedBands}
+  leftEarBands={leftEarBands}
+  rightEarBands={rightEarBands}
+  leftEarEnabled={leftEQEnabled} // Pass the state here
+  rightEarEnabled={rightEQEnabled} // Pass the state here
+  frequencyResponseData={frequencyResponseData}
+  onBandChange={handleBandChange}
+  onFrequencyChange={handleFrequencyChange}
+  height={140}
+  allowXDragging={true}
+  allowYDragging={true}
+/>
             
             {/* Save preset button */}
             <TooltipProvider>
@@ -866,7 +964,9 @@ const handleCalibrationComplete = async (preset: UserPreset) => {
   </Tooltip>
 </TooltipProvider>
           </div>
-          
+          <div className="relative right-1 text-xs text-gray-500 bg-white/80 px-2 z-10">
+        Double-click point to adjust Q
+      </div>
           {/* EQ controls */}
           <EQControls 
             isEQEnabled={isEQEnabled}
@@ -881,6 +981,8 @@ const handleCalibrationComplete = async (preset: UserPreset) => {
             onBalanceChange={handleBalanceChange}
             onResetEQ={handleResetEQ}
             activeTab={activeTab}
+            maxQValue={maxQValue}
+            onMaxQValueChange={setMaxQValue}
             onTabChange={setActiveTab}
             showCalibration={true}
             onStartCalibration={() => setIsCalibrationOpen(true)}
@@ -1153,11 +1255,11 @@ const handleCalibrationComplete = async (preset: UserPreset) => {
       </Dialog>
       
       {/* External Audio Input Dialog */}
-      <ExternalAudioInput
+      {/* <ExternalAudioInput
         open={isUrlInputOpen}
         onOpenChange={setIsUrlInputOpen}
         onAudioSelected={handleExternalAudioSelected}
-      />
+      /> */}
       
       {/* Save Preset Dialog */}
       <Dialog open={showSavePresetDialog} onOpenChange={setShowSavePresetDialog}>

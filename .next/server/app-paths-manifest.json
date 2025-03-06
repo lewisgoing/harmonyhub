@@ -1,3 +1,6 @@
 {
-  "/page": "app/page.js"
+  "/_not-found/page": "app/_not-found/page.js",
+  "/api/youtube-metadata/route": "app/api/youtube-metadata/route.js",
+  "/page": "app/page.js",
+  "/login/page": "app/login/page.js"
 }

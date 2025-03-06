@@ -1,15 +1,44 @@
 {
   "pages": {
-    "/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/page.js"
+    "/_not-found/page": [
+      "static/chunks/webpack-de96603576ac7c02.js",
+      "static/chunks/fd9d1056-796f5f0836d7e441.js",
+      "static/chunks/117-adbb5cfa097411cc.js",
+      "static/chunks/main-app-956433cae3ee42dd.js",
+      "static/chunks/app/_not-found/page-12f067ceb7415e55.js"
     ],
     "/layout": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/css/app/layout.css",
-      "static/chunks/app/layout.js"
+      "static/chunks/webpack-de96603576ac7c02.js",
+      "static/chunks/fd9d1056-796f5f0836d7e441.js",
+      "static/chunks/117-adbb5cfa097411cc.js",
+      "static/chunks/main-app-956433cae3ee42dd.js",
+      "static/css/0f22f77e64def211.css",
+      "static/chunks/bc9e92e6-388cbe5f29e2a43b.js",
+      "static/chunks/5650b5f8-6b8e56b4a7bbd0b0.js",
+      "static/chunks/634-215ddf3c943efc05.js",
+      "static/chunks/app/layout-e7d4dd947f4146fa.js"
+    ],
+    "/page": [
+      "static/chunks/webpack-de96603576ac7c02.js",
+      "static/chunks/fd9d1056-796f5f0836d7e441.js",
+      "static/chunks/117-adbb5cfa097411cc.js",
+      "static/chunks/main-app-956433cae3ee42dd.js",
+      "static/chunks/bc9e92e6-388cbe5f29e2a43b.js",
+      "static/chunks/5650b5f8-6b8e56b4a7bbd0b0.js",
+      "static/chunks/634-215ddf3c943efc05.js",
+      "static/chunks/181-8768f223df9d7df0.js",
+      "static/chunks/app/page-3128c7ae047f7ea5.js"
+    ],
+    "/login/page": [
+      "static/chunks/webpack-de96603576ac7c02.js",
+      "static/chunks/fd9d1056-796f5f0836d7e441.js",
+      "static/chunks/117-adbb5cfa097411cc.js",
+      "static/chunks/main-app-956433cae3ee42dd.js",
+      "static/chunks/bc9e92e6-388cbe5f29e2a43b.js",
+      "static/chunks/5650b5f8-6b8e56b4a7bbd0b0.js",
+      "static/chunks/634-215ddf3c943efc05.js",
+      "static/chunks/470-3eeff2b7e6e88ad7.js",
+      "static/chunks/app/login/page-6a6de210c8be8aad.js"
     ]
   }
 }

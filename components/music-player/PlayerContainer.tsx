@@ -998,6 +998,7 @@ const handleBandChange = (
             onBalanceChange={handleBalanceChange}
             onResetEQ={handleResetEQ}
             activeTab={activeTab}
+            
             maxQValue={maxQValue}
             onMaxQValueChange={setMaxQValue}
             onTabChange={setActiveTab}
@@ -1044,7 +1045,7 @@ const handleBandChange = (
       />
     ) : (
       <div>
-<Tabs defaultValue="standard">
+<Tabs defaultValue="standard" className="w-full">
   <TabsList className="grid grid-cols-3 mb-3">
     <TabsTrigger value="standard" className="text-xs">Standard</TabsTrigger>
     <TabsTrigger value="tinnitus" className="text-xs flex items-center gap-1">

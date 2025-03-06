@@ -700,19 +700,21 @@ const handleBandChange = (
 
   const handleCalibrationComplete = async (preset: UserPreset) => {
     try {
+      // Always save locally first
       await saveUserPreset(preset);
       
+      // Apply the preset to unified mode (regardless of current mode)
+      // This ensures calibration always applies to a new unified preset
       if (isSplitEarMode) {
+        // Temporarily switch to unified mode to apply the calibrated preset
         setIsSplitEarMode(false);
       }
       
+      // Apply the preset to unified mode
       handleUnifiedPresetSelect(preset);
       
-      // Switch to EQ tab
+      // Set active tab to "eq" so we see the EQ controls
       setActiveTab('eq');
-      
-      // Switch to tinnitus preset tab
-      setActivePresetTab('tinnitus');
       
       toast({
         title: "Calibration Complete",
@@ -720,6 +722,17 @@ const handleBandChange = (
           `${(preset.tinnitusCenterFreq/1000).toFixed(1)}kHz` : 
           `${preset.tinnitusCenterFreq?.toFixed(0)}Hz`} tinnitus frequency.`,
       });
+      
+      // Add a slight delay before focusing the relevant preset tab
+      // This gives time for the UI to update
+      setTimeout(() => {
+        // Find and click the tinnitus tab if it exists
+        const tinnitusTab = document.querySelector('[value="tinnitus"]') as HTMLElement;
+        if (tinnitusTab) {
+          tinnitusTab.click();
+        }
+      }, 100);
+      
     } catch (error) {
       console.error('Failed to save preset locally:', error);
       toast({
@@ -728,6 +741,7 @@ const handleBandChange = (
         variant: "destructive",
       });
     } finally {
+      // Close the calibration dialog
       setIsCalibrationOpen(false);
     }
   };
@@ -1030,7 +1044,7 @@ const handleBandChange = (
       />
     ) : (
       <div>
-<Tabs defaultValue={activePresetTab} value={activePresetTab} onValueChange={setActivePresetTab}>
+<Tabs defaultValue="standard">
   <TabsList className="grid grid-cols-3 mb-3">
     <TabsTrigger value="standard" className="text-xs">Standard</TabsTrigger>
     <TabsTrigger value="tinnitus" className="text-xs flex items-center gap-1">

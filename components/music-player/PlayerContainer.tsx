@@ -942,6 +942,8 @@ const handleBandChange = (
   onBandChange={handleBandChange}
   onFrequencyChange={handleFrequencyChange}
   height={140}
+  minGain={-24}
+  maxGain={24}
   allowXDragging={true}
   allowYDragging={true}
 />

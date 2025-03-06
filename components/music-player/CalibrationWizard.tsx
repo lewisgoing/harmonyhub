@@ -61,7 +61,7 @@ const CalibrationWizard: React.FC<CalibrationWizardProps> = ({ onComplete, onCan
   const [showVolumeWarning, setShowVolumeWarning] = useState(false);
   
   // EQ band adjustment state
-  const [notchDepth, setNotchDepth] = useState(0);
+  const [notchDepth, setNotchDepth] = useState(-12);
   const [notchWidth, setNotchWidth] = useState(0.7);
   
   // Preset name
@@ -646,8 +646,8 @@ description: `Personalized tinnitus relief preset with ${Math.abs(enforcedNotchD
     </motion.span>
   </div>
   <Slider
-    min={-12}
-    max={12}
+    min={-24}
+    max={0}
     step={1}
     value={[notchDepth]}
     onValueChange={(values) => setNotchDepth(values[0])}

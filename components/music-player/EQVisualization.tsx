@@ -70,7 +70,7 @@ const GRID_COLOR = '#e9ecef';
 const ZERO_LINE_COLOR = '#ced4da';
 const FREQUENCY_LABELS = ['60Hz', '250Hz', '1kHz', '2kHz', '4kHz', '8kHz', '12kHz', '16kHz'];
 const FREQUENCY_POSITIONS = [60, 250, 1000, 2000, 4000, 8000, 12000, 16000];
-const DB_RANGE = 24; // +/- 12dB
+const DB_RANGE = 48; // +/- 12dB
 
 /**
  * Convert frequency to x position with improved high frequency visibility

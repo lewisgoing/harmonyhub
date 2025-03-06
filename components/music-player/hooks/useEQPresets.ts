@@ -3,6 +3,7 @@ import { Preset, UserPreset, PresetType, FrequencyBand } from '../types';
 import { DEFAULT_PRESETS, STORAGE_KEYS, DEFAULT_FREQUENCY_BANDS } from '../constants';
 import { useAuth } from '@/hooks/useAuth';
 import { getUserPresets, saveUserPreset as saveCloudPreset, deleteUserPreset as deleteCloudPreset } from '@/lib/firestore';
+import { useToast } from '@/components/ui/use-toast';
 
 interface UseEQPresetsReturn {
   presets: Record<string, Preset>;
@@ -31,16 +32,19 @@ export function useEQPresets(): UseEQPresetsReturn {
   // Loading state
   const [isLoading, setIsLoading] = useState(false);
   
-  // Add this new state and ref to track save operations
-  const [isSaving, setIsSaving] = useState(false);
+  // Pending save operations
   const pendingSaveRef = useRef<{preset: UserPreset, callback?: () => void} | null>(null);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Track loading states
+  const hasLoadedLocalRef = useRef(false);
+  const isLoadingCloudRef = useRef(false);
+  const loadAttempts = useRef(0);
+  const MAX_LOAD_ATTEMPTS = 3;
   
   // Get auth state for cloud sync
   const { user } = useAuth();
-  
-  // Use ref to prevent multiple loads
-  const hasLoadedLocalRef = useRef(false);
-  const isLoadingCloudRef = useRef(false);
+  const { toast } = useToast();
 
   // First load local presets immediately (only once)
   useEffect(() => {
@@ -59,49 +63,60 @@ export function useEQPresets(): UseEQPresetsReturn {
       }
     }
   }, []);
-
-  // Add this at the beginning of the useEQPresets hook
-  const loadingCloudRef = useRef(false);
-  const loadAttempts = useRef(0);
-  const MAX_LOAD_ATTEMPTS = 3;
-
-  // Then update the cloud loading effect:
+  
+  // Second, ensure we only overwrite local presets with cloud ones if the user is logged in
   useEffect(() => {
     const loadCloudPresets = async () => {
       // Skip if already loading, no user, or too many attempts
-      if (loadingCloudRef.current || !user || loadAttempts.current >= MAX_LOAD_ATTEMPTS) return;
+      if (isLoadingCloudRef.current || !user || loadAttempts.current >= MAX_LOAD_ATTEMPTS) return;
       
-      loadingCloudRef.current = true;
+      isLoadingCloudRef.current = true;
       loadAttempts.current++;
       setIsLoading(true);
       
       try {
         console.log('Loading cloud presets for user:', user.uid);
         const cloudPresets = await getUserPresets(user.uid);
-        console.log('Loaded cloud presets:', Object.keys(cloudPresets).length);
         
-        // Get current local presets for merging
-        let currentPresets = { ...userPresets };
-        
-        // Merge local and cloud presets, with cloud taking precedence
-        const mergedPresets = {
-          ...currentPresets,
-          ...cloudPresets
-        };
-        
-        setUserPresets(mergedPresets);
-        
-        // Also save merged presets back to localStorage for offline access
-        localStorage.setItem(STORAGE_KEYS.USER_PRESETS, JSON.stringify(mergedPresets));
+        if (Object.keys(cloudPresets).length > 0) {
+          console.log('Loaded cloud presets:', Object.keys(cloudPresets).length);
+          
+          // When logged in, use cloud presets directly
+          setUserPresets(cloudPresets);
+          
+          // Store cloud presets in localStorage for offline access
+          localStorage.setItem(STORAGE_KEYS.USER_PRESETS, JSON.stringify(cloudPresets));
+          
+          toast({
+            title: "Cloud presets loaded",
+            description: `${Object.keys(cloudPresets).length} presets loaded from your account`,
+          });
+        } else {
+          console.log('No cloud presets found');
+          
+          // If no cloud presets, sync local presets to cloud
+          const localPresets = { ...userPresets };
+          
+          // Only sync if we have local presets
+          if (Object.keys(localPresets).length > 0) {
+            console.log('Syncing local presets to cloud:', Object.keys(localPresets).length);
+            
+            // Save each local preset to cloud
+            for (const preset of Object.values(localPresets)) {
+              await saveCloudPreset(preset, user.uid);
+            }
+            
+            toast({
+              title: "Presets synced to cloud",
+              description: `${Object.keys(localPresets).length} presets synced to your account`,
+            });
+          }
+        }
       } catch (error) {
         console.error('Failed to load cloud presets:', error);
-        // Don't retry on permission errors
-        if (error.code === 'permission-denied' || error.message?.includes('permissions')) {
-          loadAttempts.current = MAX_LOAD_ATTEMPTS; // Stop retrying
-        }
       } finally {
         setIsLoading(false);
-        loadingCloudRef.current = false;
+        isLoadingCloudRef.current = false;
       }
     };
     
@@ -112,23 +127,34 @@ export function useEQPresets(): UseEQPresetsReturn {
       }, 500);
       
       return () => clearTimeout(timer);
+    } else {
+      // When logged out, reset loading attempts
+      loadAttempts.current = 0;
+      
+      // When logged out, ALWAYS show local presets, not cloud presets
+      try {
+        const savedPresetsJSON = localStorage.getItem(STORAGE_KEYS.USER_PRESETS);
+        if (savedPresetsJSON) {
+          const localPresets = JSON.parse(savedPresetsJSON);
+          setUserPresets(localPresets);
+        }
+      } catch (error) {
+        console.error('Failed to load local user presets:', error);
+      }
     }
-  }, [user, userPresets]);
+  }, [user, toast]);
 
   /**
-   * Improved save function with debounce and duplicate prevention
+   * Save a user preset to both local storage and cloud if logged in
    */
   const saveUserPreset = async (preset: UserPreset, callback?: () => void) => {
-    // If we're already saving, queue this save for after the current one completes
-    if (isSaving) {
-      pendingSaveRef.current = {preset, callback};
-      return;
+    // Cancel any pending save
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
     }
     
-    setIsSaving(true);
-    
     // Check if we already have this preset with the exact same content
-    // This prevents unnecessary saves of identical data
     const existingPreset = userPresets[preset.id];
     const hasChanged = !existingPreset || 
       JSON.stringify(existingPreset.bands) !== JSON.stringify(preset.bands) ||
@@ -137,16 +163,7 @@ export function useEQPresets(): UseEQPresetsReturn {
     
     if (!hasChanged) {
       console.log('Skipping save - preset has not changed:', preset.id);
-      setIsSaving(false);
       callback?.();
-      
-      // Process any pending saves
-      if (pendingSaveRef.current) {
-        const {preset: pendingPreset, callback: pendingCallback} = pendingSaveRef.current;
-        pendingSaveRef.current = null;
-        saveUserPreset(pendingPreset, pendingCallback);
-      }
-      
       return;
     }
     
@@ -170,23 +187,19 @@ export function useEQPresets(): UseEQPresetsReturn {
     // Save to cloud if user is signed in
     if (user) {
       try {
-        console.log('Saving preset to cloud:', preset.id);
         await saveCloudPreset(preset, user.uid);
         console.log('Preset saved to cloud successfully');
       } catch (error) {
         console.error('Failed to save preset to cloud:', error);
+        toast({
+          title: "Cloud sync failed",
+          description: "Your preset was saved locally but couldn't be synced to the cloud.",
+          variant: "destructive",
+        });
       }
     }
     
-    setIsSaving(false);
     callback?.();
-    
-    // Process any pending saves
-    if (pendingSaveRef.current) {
-      const {preset: pendingPreset, callback: pendingCallback} = pendingSaveRef.current;
-      pendingSaveRef.current = null;
-      saveUserPreset(pendingPreset, pendingCallback);
-    }
   };
 
   /**
@@ -216,6 +229,11 @@ export function useEQPresets(): UseEQPresetsReturn {
         console.log('Preset deleted from cloud:', presetId);
       } catch (error) {
         console.error('Failed to delete preset from cloud:', error);
+        toast({
+          title: "Cloud sync failed",
+          description: "Your preset was deleted locally but couldn't be deleted from the cloud.",
+          variant: "destructive",
+        });
       }
     }
   };
@@ -241,7 +259,8 @@ export function useEQPresets(): UseEQPresetsReturn {
   const createCustomPreset = (
     name: string,
     bands: FrequencyBand[] = [...DEFAULT_FREQUENCY_BANDS],
-    tinnitusCenterFreq?: number
+    tinnitusCenterFreq?: number,
+    description: string = 'Custom user preset'
   ): UserPreset => {
     // Generate a unique ID that includes a timestamp AND a random string
     // to ensure no duplicates even if created at the exact same millisecond
@@ -251,7 +270,7 @@ export function useEQPresets(): UseEQPresetsReturn {
     const newPreset: UserPreset = {
       id,
       name,
-      description: 'Custom user preset',
+      description,
       color: {
         active: { bg: "#0EA5E9", text: "white" },
         inactive: { bg: "#E0F2FE", text: "#0369A1" }
@@ -277,5 +296,3 @@ export function useEQPresets(): UseEQPresetsReturn {
     isLoading
   };
 }
-
-export default useEQPresets;

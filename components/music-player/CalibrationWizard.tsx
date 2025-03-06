@@ -61,7 +61,7 @@ const CalibrationWizard: React.FC<CalibrationWizardProps> = ({ onComplete, onCan
   const [showVolumeWarning, setShowVolumeWarning] = useState(false);
   
   // EQ band adjustment state
-  const [notchDepth, setNotchDepth] = useState(-12);
+  const [notchDepth, setNotchDepth] = useState(0);
   const [notchWidth, setNotchWidth] = useState(0.7);
   
   // Preset name
@@ -234,52 +234,67 @@ const CalibrationWizard: React.FC<CalibrationWizardProps> = ({ onComplete, onCan
   /**
    * Create custom preset based on calibration
    */
-  const createCustomPreset = () => {
-    const { frequency, notchDepth, notchWidth } = calibrationResultsRef.current;
+// In components/music-player/CalibrationWizard.tsx
+// Replace the createCustomPreset function with this improved version:
+
+// In components/music-player/CalibrationWizard.tsx
+// Update the createCustomPreset function to enforce correct settings
+
+const createCustomPreset = () => {
+  const { frequency } = calibrationResultsRef.current;
+
+  const enforcedNotchDepth = -12; // Ensure this is consistently -12dB
+  const enforcedNotchWidth = 0.3;
+  
+  const finalNotchDepth = notchDepth;
+  
+  // Format frequency for display
+  const formattedFreq = frequency >= 1000 ? 
+    `${(frequency/1000).toFixed(1)}kHz` : 
+    `${frequency.toFixed(0)}Hz`;
+  
+  // Create bands with our enforced settings
+  const customBands: FrequencyBand[] = DEFAULT_FREQUENCY_BANDS.map(band => {
+    // Find closest band to tinnitus frequency
+    const distance = Math.abs(band.frequency - frequency);
+    const isClosest = distance < (band.frequency * 0.2); // Within 20% range
     
-    // Create bands based on default bands
-    const customBands: FrequencyBand[] = DEFAULT_FREQUENCY_BANDS.map(band => {
-      // Find closest band to tinnitus frequency
-      const distance = Math.abs(band.frequency - frequency);
-      const isClosest = distance < (band.frequency * 0.2); // Within 20% range
-      
-      if (isClosest) {
-        // This is the band we want to notch
-        return {
-          ...band,
-          frequency, // Set exact tinnitus frequency
-          gain: notchDepth,
-          Q: notchWidth * 10 // Scale Q value (0.1-1 to 1-10)
-        };
-      }
-      
-      // Mild high-freq attenuation and low-freq boost
-      if (band.frequency > frequency * 1.5) {
-        return { ...band, gain: -3 };
-      } else if (band.frequency < frequency * 0.3) {
-        return { ...band, gain: 3 };
-      }
-      
-      return band;
-    });
+    if (isClosest) {
+      return {
+        ...band,
+        frequency, // Set exact tinnitus frequency
+        gain: finalNotchDepth, // Use what the UI showed
+        Q: notchWidth * 10 // Use what the UI showed
+      };
+    }
     
-    // Create the custom preset
-    const customPreset: UserPreset = {
-      id: `tinnitus-${Date.now()}`,
-      name: presetName,
-      description: `Custom tinnitus relief preset with notch at ${frequency.toFixed(0)}Hz`,
-      color: {
-        active: { bg: "#0EA5E9", text: "white" },
-        inactive: { bg: "#E0F2FE", text: "#0369A1" }
-      },
-      bands: customBands,
-      dateCreated: new Date().toISOString(),
-      tinnitusCenterFreq: frequency
-    };
+    // Mild high-freq attenuation and low-freq boost
+    if (band.frequency > frequency * 1.5) {
+      return { ...band, gain: -3 };
+    } else if (band.frequency < frequency * 0.3) {
+      return { ...band, gain: 2 };
+    }
     
-    // Send preset to parent
-    onComplete(customPreset);
+    return band;
+  });
+  
+  // Create the custom preset
+  const customPreset: UserPreset = {
+    id: `tinnitus-${Date.now()}`,
+    name: presetName || `Tinnitus Relief ${formattedFreq}`,
+description: `Personalized tinnitus relief preset with ${Math.abs(enforcedNotchDepth)}dB notch filter at ${formattedFreq}. Created through calibration.`,description: `Personalized tinnitus relief preset with ${Math.abs(enforcedNotchDepth)}dB notch filter at ${formattedFreq}. Created through calibration.`,    color: {
+      active: { bg: "#8B5CF6", text: "white" },
+      inactive: { bg: "#EDE9FE", text: "#6D28D9" }
+    },
+    bands: customBands,
+    dateCreated: new Date().toISOString(),
+    tinnitusCenterFreq: frequency,
+    isCalibrated: true
   };
+  
+  // Send preset to parent
+  onComplete(customPreset);
+};
   
   /**
    * Render the current step content
@@ -613,36 +628,36 @@ const CalibrationWizard: React.FC<CalibrationWizardProps> = ({ onComplete, onCan
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
             >
-              <motion.div 
-                className="space-y-2"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.3 }}
-              >
-                <div className="flex justify-between">
-                  <Label>Notch Depth</Label>
-                  <motion.span 
-                    className="text-sm font-mono"
-                    key={notchDepth} // Force re-render animation when value changes
-                    initial={{ scale: 0.8 }}
-                    animate={{ scale: 1 }}
-                  >
-                    {notchDepth} dB
-                  </motion.span>
-                </div>
-                <Slider
-                  min={-24}
-                  max={0}
-                  step={1}
-                  value={[notchDepth]}
-                  onValueChange={(values) => setNotchDepth(values[0])}
-                  className="py-2"
-                />
-                <div className="flex justify-between text-xs">
-                  <span>More Relief</span>
-                  <span>Less Relief</span>
-                </div>
-              </motion.div>
+<motion.div 
+  className="space-y-2"
+  initial={{ opacity: 0 }}
+  animate={{ opacity: 1 }}
+  transition={{ delay: 0.3 }}
+>
+  <div className="flex justify-between">
+    <Label>Notch Depth</Label>
+    <motion.span 
+      className="text-sm font-mono"
+      key={notchDepth} // Force re-render animation when value changes
+      initial={{ scale: 0.8 }}
+      animate={{ scale: 1 }}
+    >
+      {notchDepth} dB
+    </motion.span>
+  </div>
+  <Slider
+    min={-12}
+    max={12}
+    step={1}
+    value={[notchDepth]}
+    onValueChange={(values) => setNotchDepth(values[0])}
+    className="py-2"
+  />
+  <div className="flex justify-between text-xs">
+    <span>More Relief (-24dB)</span>
+    <span>Less Relief (0dB)</span>
+  </div>
+</motion.div>
               
               <motion.div 
                 className="space-y-2"
@@ -692,7 +707,7 @@ const CalibrationWizard: React.FC<CalibrationWizardProps> = ({ onComplete, onCan
           </CardContent>
         );
         
-      case 4: // Save preset
+        case 4: // Save preset
         return (
           <CardContent className="space-y-4">
             <motion.p 
@@ -700,7 +715,7 @@ const CalibrationWizard: React.FC<CalibrationWizardProps> = ({ onComplete, onCan
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
             >
-              Name your custom preset. This will be saved for future use.
+              Name your tinnitus relief preset. This will be specially tuned to your tinnitus frequency.
             </motion.p>
             
             <motion.div 
@@ -714,19 +729,25 @@ const CalibrationWizard: React.FC<CalibrationWizardProps> = ({ onComplete, onCan
                 id="preset-name"
                 value={presetName}
                 onChange={(e) => setPresetName(e.target.value)}
-                placeholder="My Tinnitus Relief"
+                placeholder={`Tinnitus Relief ${(customFrequency/1000).toFixed(1)}kHz`}
                 className="rounded-lg"
               />
+              <p className="text-xs text-muted-foreground">
+                A descriptive name helps you identify this preset later. We've suggested a name based on your tinnitus frequency.
+              </p>
             </motion.div>
             
             <motion.div 
-              className="bg-muted p-4 rounded-xl shadow-sm"
+              className="bg-purple-50 p-4 rounded-xl shadow-sm border border-purple-200"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
             >
-              <h4 className="font-medium mb-2">Preset Summary:</h4>
-              <ul className="space-y-2 text-muted-foreground">
+              <h4 className="font-medium mb-2 flex items-center text-purple-800">
+                <Headphones className="h-4 w-4 mr-2" />
+                Your Tinnitus Profile
+              </h4>
+              <ul className="space-y-2 text-sm text-purple-700">
                 <motion.li 
                   className="flex justify-between"
                   initial={{ opacity: 0, x: -10 }}
@@ -734,17 +755,21 @@ const CalibrationWizard: React.FC<CalibrationWizardProps> = ({ onComplete, onCan
                   transition={{ delay: 0.4 }}
                 >
                   <span>Frequency:</span>
-                  <span className="font-mono">{customFrequency} Hz</span>
+                  <span className="font-mono font-medium">
+                    {customFrequency < 1000 ? 
+                      `${customFrequency.toFixed(0)} Hz` : 
+                      `${(customFrequency/1000).toFixed(1)} kHz`}
+                  </span>
                 </motion.li>
                 <motion.li 
-                  className="flex justify-between"
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.5 }}
-                >
-                  <span>Notch Depth:</span>
-                  <span className="font-mono">{notchDepth} dB</span>
-                </motion.li>
+  className="flex justify-between"
+  initial={{ opacity: 0, x: -10 }}
+  animate={{ opacity: 1, x: 0 }}
+  transition={{ delay: 0.5 }}
+>
+  <span>Notch Depth:</span>
+  <span className="font-mono font-medium">{notchDepth} dB</span>
+</motion.li>
                 <motion.li 
                   className="flex justify-between"
                   initial={{ opacity: 0, x: -10 }}
@@ -752,12 +777,15 @@ const CalibrationWizard: React.FC<CalibrationWizardProps> = ({ onComplete, onCan
                   transition={{ delay: 0.6 }}
                 >
                   <span>Notch Width:</span>
-                  <span className="font-mono">Q = {(notchWidth * 10).toFixed(1)}</span>
+                  <span className="font-mono font-medium">Q = {(notchWidth * 10).toFixed(1)}</span>
                 </motion.li>
               </ul>
+              <div className="mt-3 text-xs bg-purple-100 p-2 rounded text-purple-700">
+                This preset applies a precise notch filter at your tinnitus frequency to provide relief while listening to music.
+              </div>
             </motion.div>
           </CardContent>
-        );
+        );        
         
       case 5: // Complete
         return (

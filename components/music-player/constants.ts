@@ -5,14 +5,14 @@ import { Preset, FrequencyBand, Song } from './types';
  * Focused on ranges relevant for tinnitus and speech
  */
 export const DEFAULT_FREQUENCY_BANDS: FrequencyBand[] = [
-  { id: 'band1', frequency: 125, gain: 0, Q: 1.0 },   // Low bass
-  { id: 'band2', frequency: 250, gain: 0, Q: 1.0 },   // Bass
-  { id: 'band3', frequency: 500, gain: 0, Q: 1.0 },   // Low mids
-  { id: 'band4', frequency: 1000, gain: 0, Q: 1.0 },  // Mids
-  { id: 'band5', frequency: 2000, gain: 0, Q: 1.0 },  // Upper mids
-  { id: 'band6', frequency: 4000, gain: 0, Q: 1.0 },  // Presence (common tinnitus range)
-  { id: 'band7', frequency: 8000, gain: 0, Q: 1.0 },  // Brilliance (common tinnitus range)
-  { id: 'band8', frequency: 16000, gain: 0, Q: 1.0 }, // Air
+  { id: 'band1', frequency: 125, gain: 0, Q: 2.0 },   // Low bass
+  { id: 'band2', frequency: 250, gain: 0, Q: 2.0 },   // Bass
+  { id: 'band3', frequency: 500, gain: 0, Q: 3.0 },   // Low mids
+  { id: 'band4', frequency: 1000, gain: 0, Q: 3.0 },  // Mids
+  { id: 'band5', frequency: 2000, gain: 0, Q: 4.0 },  // Upper mids
+  { id: 'band6', frequency: 4000, gain: 0, Q: 4.0 },  // Presence (common tinnitus range)
+  { id: 'band7', frequency: 8000, gain: 0, Q: 5.0 },  // Brilliance (common tinnitus range)
+  { id: 'band8', frequency: 16000, gain: 0, Q: 4.0 }, // Air
 ];
 
 /**
@@ -176,7 +176,7 @@ export const STORAGE_KEYS = {
  * Audio context configuration
  */
 export const AUDIO_CONTEXT_CONFIG = {
-  DEFAULT_Q: 1.0,
+  DEFAULT_Q: 5.0,
   MOBILE_BREAKPOINT: 768,
   TRANSITION_DURATION: 150, // ms
 };

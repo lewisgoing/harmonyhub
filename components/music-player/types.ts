@@ -52,6 +52,7 @@ export interface Preset {
 export interface UserPreset extends Preset {
   dateCreated: string;
   tinnitusCenterFreq?: number;
+  isCalibrated?: boolean;
 }
 
 // Split ear configuration

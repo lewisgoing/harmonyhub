@@ -121,6 +121,13 @@ const PlayerContainer: React.FC = () => {
   
   // Modify the original method
 
+  const handleFrequencyResponseUpdate = (responseData: any) => {
+    if (responseData) {
+      console.log("Updating frequency response data from callback");
+      setFrequencyResponseData(responseData);
+    }
+  };
+
   
   // Audio context state
   const { 
@@ -131,7 +138,11 @@ const PlayerContainer: React.FC = () => {
     handleSeek,
     setVolume,
     volume 
-  } = useAudioContext({ song: currentSong });
+  } = useAudioContext({ 
+    song: currentSong,
+    onFrequencyResponseUpdate: handleFrequencyResponseUpdate 
+  });
+  
 
   // Player controls
   const playerControlsRef = useRef(null);
@@ -158,6 +169,14 @@ const PlayerContainer: React.FC = () => {
     leftMagnitudes: Float32Array;
     rightMagnitudes: Float32Array;
   } | undefined>(undefined);
+
+  useEffect(() => {
+    if (audioEngine && !frequencyResponseData) {
+      console.log("Initial frequency response calculation");
+      const responseData = audioEngine.getFrequencyResponse();
+      setFrequencyResponseData(responseData);
+    }
+  }, [audioEngine]);
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -335,6 +354,24 @@ const PlayerContainer: React.FC = () => {
     }
   };
 
+  const ensureAudioContextReady = async () => {
+    if (audioEngine) {
+      await audioEngine.ensureAudioContextReady();
+      
+      // Force an update of the frequency response data
+      const responseData = audioEngine.getFrequencyResponse();
+      setFrequencyResponseData(responseData);
+    }
+  };
+
+  const handlePlayPause = async () => {
+    // First ensure audio context is ready
+    await ensureAudioContextReady();
+    
+    // Then toggle playback
+    togglePlayPause();
+  };
+
   // Save settings when they change
   useEffect(() => {
     const saveSettings = async () => {
@@ -434,6 +471,39 @@ const PlayerContainer: React.FC = () => {
     }
   }, [audioEngine]);
 
+
+  // In the togglePlayPause function or useEffect that runs after audio initialization
+useEffect(() => {
+  if (audioEngine) {
+    // Request a new frequency response after audio context is initialized or play is pressed
+    const updateFrequencyResponse = () => {
+      const responseData = audioEngine.getFrequencyResponse();
+      setFrequencyResponseData(responseData);
+    };
+    
+    // Add event listener to audio element for play events
+    const handlePlay = () => {
+      // Use requestAnimationFrame to ensure we're in the next render cycle
+      requestAnimationFrame(updateFrequencyResponse);
+    };
+    
+    // Add listener to audio element
+    if (audioRef.current) {
+      audioRef.current.addEventListener('play', handlePlay);
+    }
+    
+    // Also request an immediate update
+    updateFrequencyResponse();
+    
+    return () => {
+      // Clean up listener
+      if (audioRef.current) {
+        audioRef.current.removeEventListener('play', handlePlay);
+      }
+    };
+  }
+}, [audioEngine, audioRef]);
+
   /**
    * Toggle EQ on/off
    */
@@ -488,6 +558,10 @@ const PlayerContainer: React.FC = () => {
       description: "EQ settings have been reset to flat",
     });
   };
+
+
+
+  
 
   /**
    * Apply unified preset
@@ -598,6 +672,12 @@ const handleBandChange = (
           } 
         : band
     ));
+  }
+  if (audioEngine) {
+    const responseData = audioEngine.refreshFrequencyResponse();
+    if (responseData) {
+      setFrequencyResponseData(responseData);
+    }
   }
 };
   /**
@@ -933,13 +1013,13 @@ const handleBandChange = (
         <div className="space-y-4">
           {/* Playback controls */}
           <PlayerControls 
-            playbackState={playbackState}
-            onPlayPause={togglePlayPause}
-            onSeek={handleSeek}
-            onVolumeChange={values => setVolume(values[0])}
-            volume={volume}
-            showVolumeControl={true}
-          />
+  playbackState={playbackState}
+  onPlayPause={handlePlayPause} // Use our wrapper instead
+  onSeek={handleSeek}
+  onVolumeChange={values => setVolume(values[0])}
+  volume={volume}
+  showVolumeControl={true}
+/>
           
           {/* Add save preset button next to visualization */}
           <div className="relative">

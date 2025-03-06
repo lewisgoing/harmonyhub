@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { FrequencyBand } from './types';
 import { Slider } from '@/components/ui/slider';
 import { Button } from '@/components/ui/button';
@@ -290,12 +290,13 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
   /**
    * Draw the EQ curve on the canvas
    */
-  const drawEQCurve = () => {
+  const drawEQCurve = useCallback(() => {
     if (!canvasRef.current) return;
     
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+    
     
     const { width, height } = canvas;
     
@@ -349,7 +350,15 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
     if (interactive) {
       drawBandPoints(ctx, width, height);
     }
-  };
+  }, [
+    isEQEnabled,
+    isSplitEarMode,
+    unifiedBands,
+    leftEarBands,
+    rightEarBands,
+    frequencyResponseData,
+    height
+  ]);
 
 
   /**
@@ -382,6 +391,23 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
       ctx.lineTo(x, height);
       ctx.stroke();
     }
+
+    const tinnitusMinFreq = 3000; // 3kHz
+const tinnitusMaxFreq = 8000; // 8kHz
+
+// Draw a subtle highlight for the common tinnitus frequency range
+const xMin = freqToX(tinnitusMinFreq, width);
+const xMax = freqToX(tinnitusMaxFreq, width);
+
+// Draw a subtle background highlight
+ctx.fillStyle = 'rgba(255, 240, 245, 0.4)'; // Very light pink
+ctx.fillRect(xMin, 0, xMax - xMin, height);
+
+// Add a small text label
+ctx.fillStyle = 'rgba(220, 50, 50, 0.7)';
+ctx.font = '9px system-ui';
+ctx.textAlign = 'center';
+ctx.fillText('Common Tinnitus Range', (xMin + xMax) / 2, height - 20);
     
     // Draw zero line with a different color
     ctx.strokeStyle = ZERO_LINE_COLOR;

@@ -6,6 +6,7 @@ import AudioEngine from '../AudioEngine';
 
 interface UseAudioContextProps {
   song: Song;
+  onFrequencyResponseUpdate?: (data: any) => void; // New callback for frequency response
 }
 
 interface UseAudioContextReturn {
@@ -21,7 +22,10 @@ interface UseAudioContextReturn {
 /**
  * Custom hook for managing audio context and playback
  */
-export function useAudioContext({ song }: UseAudioContextProps): UseAudioContextReturn {
+export function useAudioContext({ 
+  song, 
+  onFrequencyResponseUpdate 
+}: UseAudioContextProps): UseAudioContextReturn {
   // Audio element reference
   const audioRef = useRef<HTMLAudioElement | null>(null);
   
@@ -44,6 +48,8 @@ export function useAudioContext({ song }: UseAudioContextProps): UseAudioContext
   const [audioInitialized, setAudioInitialized] = useState(false);
   
   // Create audio element
+
+  
   useEffect(() => {
     console.log('Setting up audio element for song:', song.audio);
     
@@ -118,6 +124,32 @@ export function useAudioContext({ song }: UseAudioContextProps): UseAudioContext
     };
   }, [song.audio]);
   
+
+  useEffect(() => {
+    // Add event listener to update frequency response after play
+    if (audioRef.current && audioEngineRef.current) {
+      const handlePlay = () => {
+        // When playback starts, force a frequency response update
+        console.log("Play event detected - updating frequency response");
+        if (audioEngineRef.current) {
+          const responseData = audioEngineRef.current.refreshFrequencyResponse();
+          if (responseData && onFrequencyResponseUpdate) {
+            onFrequencyResponseUpdate(responseData);
+          }
+        }
+      };
+      
+      // Add listener to play event
+      audioRef.current.addEventListener('play', handlePlay);
+      
+      return () => {
+        // Clean up listener
+        if (audioRef.current) {
+          audioRef.current.removeEventListener('play', handlePlay);
+        }
+      };
+    }
+  }, [audioRef, audioEngineRef, onFrequencyResponseUpdate]);
   /**
    * Initialize audio engine when audio element is ready
    */
@@ -150,6 +182,9 @@ export function useAudioContext({ song }: UseAudioContextProps): UseAudioContext
       }
       
       if (playbackState.isPlaying) {
+        if (audioEngineRef.current) {
+          await audioEngineRef.current.ensureAudioContextReady();
+        }
         // Pause playback
         audioRef.current.pause();
         setPlaybackState(prev => ({ ...prev, isPlaying: false }));

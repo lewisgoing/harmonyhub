@@ -1,14 +1,21 @@
 import { AudioNodes, FrequencyBand, ChannelMode, SoloMode, SplitEarConfig, Preset } from './types';
 import { DEFAULT_FREQUENCY_BANDS } from './constants';
 
-
 /**
  * AudioEngine class handles all interactions with the Web Audio API
  */
 export class AudioEngine {
   private debounceTimers: Record<string, number> = {};
-
   private audioElement: HTMLAudioElement | null = null;
+  
+  // Add cache properties
+  private cacheInvalidated = true;
+  private lastResponseCache: {
+    frequencies: Float32Array, 
+    leftMagnitudes: Float32Array, 
+    rightMagnitudes: Float32Array
+  } | null = null;
+  
   public nodes: AudioNodes = {
     context: null,
     source: null,
@@ -40,19 +47,18 @@ export class AudioEngine {
   }
 
   /**
- * Simple debounce utility
- */
-private debounce(func: Function, wait: number, key: string): void {
-  if (this.debounceTimers[key]) {
-    clearTimeout(this.debounceTimers[key]);
+   * Simple debounce utility
+   */
+  private debounce(func: Function, wait: number, key: string): void {
+    if (this.debounceTimers[key]) {
+      clearTimeout(this.debounceTimers[key]);
+    }
+    
+    this.debounceTimers[key] = window.setTimeout(() => {
+      func();
+      delete this.debounceTimers[key];
+    }, wait);
   }
-  
-  this.debounceTimers[key] = window.setTimeout(() => {
-    func();
-    delete this.debounceTimers[key];
-  }, wait);
-}
-
 
   /**
    * Initialize the audio context and create base nodes
@@ -94,11 +100,60 @@ private debounce(func: Function, wait: number, key: string): void {
       // Set up initial audio routing
       await this.updateAudioRouting();
       
+      // Invalidate cache to ensure fresh frequency response
+      this.cacheInvalidated = true;
+      
       return true;
     } catch (error) {
       console.error("Failed to initialize audio context:", error);
       return false;
     }
+  }
+
+  /**
+   * Ensure the audio context is resumed and ready
+   */
+  public async ensureAudioContextReady(): Promise<boolean> {
+    if (!this.nodes.context) {
+      console.error("No audio context to resume");
+      return false;
+    }
+    
+    if (this.nodes.context.state === 'suspended') {
+      try {
+        console.log("Resuming suspended audio context");
+        await this.nodes.context.resume();
+        console.log("Audio context resumed successfully");
+        
+        // Force a fresh frequency response
+        this.cacheInvalidated = true;
+        
+        return true;
+      } catch (error) {
+        console.error("Failed to resume audio context:", error);
+        return false;
+      }
+    }
+    
+    return true;
+  }
+  
+  /**
+   * Refresh the frequency response data (useful after context state changes)
+   */
+  public refreshFrequencyResponse(): {
+    frequencies: Float32Array, 
+    leftMagnitudes: Float32Array, 
+    rightMagnitudes: Float32Array
+  } | undefined {
+    // Mark cache as invalid to force refresh
+    this.cacheInvalidated = true;
+    
+    // Return fresh frequency response data
+    if (this.nodes.context) {
+      return this.getFrequencyResponse();
+    }
+    return undefined;
   }
 
   /**
@@ -143,6 +198,9 @@ private debounce(func: Function, wait: number, key: string): void {
    */
   public async updateAudioRouting(): Promise<boolean> {
     try {
+      // First ensure audio context is ready
+      await this.ensureAudioContextReady();
+      
       if (!this.nodes.context || !this.nodes.source) {
         console.log("Cannot update audio routing - missing context or source");
         return false;
@@ -170,136 +228,125 @@ private debounce(func: Function, wait: number, key: string): void {
         console.log("Rebuilding audio routing", 
                     "Mode:", this.splitEarMode ? "split" : "unified");
 
-                    this.nodes.filters = [];
-                    this.nodes.leftFilters = [];
-                    this.nodes.rightFilters = [];
-                    this.nodes.splitter = null;
-                    this.nodes.merger = null;
-                    this.nodes.leftGain = null;
-                    this.nodes.rightGain = null;
+        this.nodes.filters = [];
+        this.nodes.leftFilters = [];
+        this.nodes.rightFilters = [];
+        this.nodes.splitter = null;
+        this.nodes.merger = null;
+        this.nodes.leftGain = null;
+        this.nodes.rightGain = null;
       
-      // First disconnect everything
-      // try {
-      //   mediaSource.disconnect();
-      // } catch (e) {
-      //   console.warn("Error disconnecting source:", e);
-      // }
-      
-      // console.log("Updating audio routing", 
-      //             "Mode:", this.splitEarMode ? "split" : "unified", 
-      //             "EQ enabled:", this.eqEnabled);
-      
-      if (this.splitEarMode) {
-        // SPLIT EAR MODE SETUP
-        console.log("Setting up split ear mode");
-        
-        // Create splitter
-        const splitter = context.createChannelSplitter(2);
-        this.nodes.splitter = splitter;
-        
-        // Create merger
-        const merger = context.createChannelMerger(2);
-        this.nodes.merger = merger;
-        
-        // Create gain nodes
-        const leftGain = context.createGain();
-        const rightGain = context.createGain();
-        this.nodes.leftGain = leftGain;
-        this.nodes.rightGain = rightGain;
-        
-        // Create filters for left channel
-        const leftFilters = this.createFiltersFromBands(context, this.leftEarBands);
-        this.nodes.leftFilters = leftFilters;
-        
-        // Create filters for right channel
-        const rightFilters = this.createFiltersFromBands(context, this.rightEarBands);
-        this.nodes.rightFilters = rightFilters;
-        
-        // Apply gain and balance
-        this.applyBalance();
-        
-        // Connect everything in sequence
-        mediaSource.connect(splitter);
-        
-        // Left channel
-        splitter.connect(leftFilters[0], 0);
-        // Connect filters in sequence
-        for (let i = 0; i < leftFilters.length - 1; i++) {
-          leftFilters[i].connect(leftFilters[i + 1]);
-        }
-        // Connect last filter to gain
-        leftFilters[leftFilters.length - 1].connect(leftGain);
-        leftGain.connect(merger, 0, 0);
-        
-        // Right channel
-        splitter.connect(rightFilters[0], 1);
-        // Connect filters in sequence
-        for (let i = 0; i < rightFilters.length - 1; i++) {
-          rightFilters[i].connect(rightFilters[i + 1]);
-        }
-        // Connect last filter to gain
-        rightFilters[rightFilters.length - 1].connect(rightGain);
-        rightGain.connect(merger, 0, 1);
-        
-        // Connect merger to destination
-        merger.connect(context.destination);
-        
-        // Apply EQ settings
-        this.applyEQSettings();
-        
-        console.log("Split ear mode setup complete");
-      } else {
-        // UNIFIED MODE SETUP
-        console.log("Setting up unified mode");
-        
-        // Create filters
-        const filters = this.createFiltersFromBands(context, this.unifiedBands);
-        this.nodes.filters = filters;
-        
-        // Create splitter for balance control
-        const splitter = context.createChannelSplitter(2);
-        this.nodes.splitter = splitter;
-        
-        // Create merger
-        const merger = context.createChannelMerger(2);
-        this.nodes.merger = merger;
-        
-        // Create gain nodes for balance
-        const leftGain = context.createGain();
-        const rightGain = context.createGain();
-        this.nodes.leftGain = leftGain;
-        this.nodes.rightGain = rightGain;
-        
-        // Apply gain and balance
-        this.applyBalance();
-        
-        // Connect nodes: Source -> Filters -> Splitter -> Gains -> Merger -> Destination
-        if (this.eqEnabled) {
-          mediaSource.connect(filters[0]);
+        if (this.splitEarMode) {
+          // SPLIT EAR MODE SETUP
+          console.log("Setting up split ear mode");
           
+          // Create splitter
+          const splitter = context.createChannelSplitter(2);
+          this.nodes.splitter = splitter;
+          
+          // Create merger
+          const merger = context.createChannelMerger(2);
+          this.nodes.merger = merger;
+          
+          // Create gain nodes
+          const leftGain = context.createGain();
+          const rightGain = context.createGain();
+          this.nodes.leftGain = leftGain;
+          this.nodes.rightGain = rightGain;
+          
+          // Create filters for left channel
+          const leftFilters = this.createFiltersFromBands(context, this.leftEarBands);
+          this.nodes.leftFilters = leftFilters;
+          
+          // Create filters for right channel
+          const rightFilters = this.createFiltersFromBands(context, this.rightEarBands);
+          this.nodes.rightFilters = rightFilters;
+          
+          // Apply gain and balance
+          this.applyBalance();
+          
+          // Connect everything in sequence
+          mediaSource.connect(splitter);
+          
+          // Left channel
+          splitter.connect(leftFilters[0], 0);
           // Connect filters in sequence
-          for (let i = 0; i < filters.length - 1; i++) {
-            filters[i].connect(filters[i + 1]);
+          for (let i = 0; i < leftFilters.length - 1; i++) {
+            leftFilters[i].connect(leftFilters[i + 1]);
+          }
+          // Connect last filter to gain
+          leftFilters[leftFilters.length - 1].connect(leftGain);
+          leftGain.connect(merger, 0, 0);
+          
+          // Right channel
+          splitter.connect(rightFilters[0], 1);
+          // Connect filters in sequence
+          for (let i = 0; i < rightFilters.length - 1; i++) {
+            rightFilters[i].connect(rightFilters[i + 1]);
+          }
+          // Connect last filter to gain
+          rightFilters[rightFilters.length - 1].connect(rightGain);
+          rightGain.connect(merger, 0, 1);
+          
+          // Connect merger to destination
+          merger.connect(context.destination);
+          
+          // Apply EQ settings
+          this.applyEQSettings();
+          
+          console.log("Split ear mode setup complete");
+        } else {
+          // UNIFIED MODE SETUP
+          console.log("Setting up unified mode");
+          
+          // Create filters
+          const filters = this.createFiltersFromBands(context, this.unifiedBands);
+          this.nodes.filters = filters;
+          
+          // Create splitter for balance control
+          const splitter = context.createChannelSplitter(2);
+          this.nodes.splitter = splitter;
+          
+          // Create merger
+          const merger = context.createChannelMerger(2);
+          this.nodes.merger = merger;
+          
+          // Create gain nodes for balance
+          const leftGain = context.createGain();
+          const rightGain = context.createGain();
+          this.nodes.leftGain = leftGain;
+          this.nodes.rightGain = rightGain;
+          
+          // Apply gain and balance
+          this.applyBalance();
+          
+          // Connect nodes: Source -> Filters -> Splitter -> Gains -> Merger -> Destination
+          if (this.eqEnabled) {
+            mediaSource.connect(filters[0]);
+            
+            // Connect filters in sequence
+            for (let i = 0; i < filters.length - 1; i++) {
+              filters[i].connect(filters[i + 1]);
+            }
+            
+            // Split for balance control
+            filters[filters.length - 1].connect(splitter);
+          } else {
+            // Skip filters if EQ is disabled
+            mediaSource.connect(splitter);
           }
           
-          // Split for balance control
-          filters[filters.length - 1].connect(splitter);
-        } else {
-          // Skip filters if EQ is disabled
-          mediaSource.connect(splitter);
+          splitter.connect(leftGain, 0);
+          splitter.connect(rightGain, 1);
+          leftGain.connect(merger, 0, 0);
+          rightGain.connect(merger, 0, 1);
+          merger.connect(context.destination);
+          
+          // Apply EQ settings
+          this.applyEQSettings();
+          
+          console.log("Unified mode setup complete");
         }
-        
-        splitter.connect(leftGain, 0);
-        splitter.connect(rightGain, 1);
-        leftGain.connect(merger, 0, 0);
-        rightGain.connect(merger, 0, 1);
-        merger.connect(context.destination);
-        
-        // Apply EQ settings
-        this.applyEQSettings();
-        
-        console.log("Unified mode setup complete");
-      }
       } else {
         console.log("Updating audio parameters without rebuilding graph");
       
@@ -309,6 +356,9 @@ private debounce(func: Function, wait: number, key: string): void {
         // Update EQ settings
         this.applyEQSettings();
       }
+      
+      // Force frequency response update
+      this.cacheInvalidated = true;
       
       return true;
     } catch (error) {
@@ -359,12 +409,6 @@ private debounce(func: Function, wait: number, key: string): void {
     let rightGain = this.balance >= 0.5 ? 
       1 : this.balance * 2;
     
-    // REMOVED: The code that was setting gain to 0 based on ear enabled state
-    // if (this.splitEarMode) {
-    //   if (!this.leftEarEnabled) leftGain = 0;
-    //   if (!this.rightEarEnabled) rightGain = 0;
-    // }
-    
     // Apply gain values
     this.nodes.leftGain.gain.value = leftGain;
     this.nodes.rightGain.gain.value = rightGain;
@@ -375,10 +419,6 @@ private debounce(func: Function, wait: number, key: string): void {
     } else if (this.soloMode === 'right') {
       this.nodes.leftGain.gain.value = 0;
     }
-    
-    // console.log("Balance applied", 
-                // "Left gain:", this.nodes.leftGain.gain.value, 
-                // "Right gain:", this.nodes.rightGain.gain.value);
   }
 
   /**
@@ -407,6 +447,9 @@ private debounce(func: Function, wait: number, key: string): void {
         this.eqEnabled
       );
     }
+    
+    // Always invalidate cache when settings change
+    this.cacheInvalidated = true;
   }
 
   /**
@@ -443,20 +486,14 @@ private debounce(func: Function, wait: number, key: string): void {
         // Apply Q change with a smooth ramp
         filter.Q.cancelScheduledValues(currentTime);
         filter.Q.setValueAtTime(filter.Q.value, currentTime);
-
-        const scaledQ = band.Q > 10 ? 10 + (band.Q - 10) * 0.5 : band.Q;
-
-        
         filter.Q.linearRampToValueAtTime(band.Q, currentTime + rampTime);
-
-        
       }
     });
   }
 
   /**
- * Approximate frequency response from bands when WebAudio API is not available
- */
+   * Approximate frequency response from bands when WebAudio API is not available
+   */
   private approximateResponse(
     frequencies: Float32Array,
     magnitudes: Float32Array,
@@ -492,6 +529,9 @@ private debounce(func: Function, wait: number, key: string): void {
     if (!this.splitEarMode) {
       this.updateAudioRouting();
     }
+    
+    // Invalidate cache
+    this.cacheInvalidated = true;
   }
 
   /**
@@ -506,6 +546,9 @@ private debounce(func: Function, wait: number, key: string): void {
         this.eqEnabled
       );
     }
+    
+    // Invalidate cache
+    this.cacheInvalidated = true;
   }
 
   /**
@@ -520,6 +563,9 @@ private debounce(func: Function, wait: number, key: string): void {
         this.eqEnabled && this.leftEarEnabled
       );
     }
+    
+    // Invalidate cache
+    this.cacheInvalidated = true;
   }
 
   /**
@@ -534,6 +580,9 @@ private debounce(func: Function, wait: number, key: string): void {
         this.eqEnabled && this.rightEarEnabled
       );
     }
+    
+    // Invalidate cache
+    this.cacheInvalidated = true;
   }
 
   /**
@@ -543,6 +592,9 @@ private debounce(func: Function, wait: number, key: string): void {
     if (this.splitEarMode !== enabled) {
       this.splitEarMode = enabled;
       this.updateAudioRouting();
+      
+      // Invalidate cache
+      this.cacheInvalidated = true;
     }
   }
 
@@ -559,6 +611,9 @@ private debounce(func: Function, wait: number, key: string): void {
       );
       this.applyBalance();
     }
+    
+    // Invalidate cache
+    this.cacheInvalidated = true;
   }
   
   public setRightEarEnabled(enabled: boolean): void {
@@ -571,6 +626,9 @@ private debounce(func: Function, wait: number, key: string): void {
       );
       this.applyBalance();
     }
+    
+    // Invalidate cache
+    this.cacheInvalidated = true;
   }
 
   /**
@@ -579,6 +637,9 @@ private debounce(func: Function, wait: number, key: string): void {
   public setBalance(balance: number): void {
     this.balance = balance;
     this.applyBalance();
+    
+    // Invalidate cache
+    this.cacheInvalidated = true;
   }
 
   /**
@@ -596,6 +657,9 @@ private debounce(func: Function, wait: number, key: string): void {
   public setSoloMode(mode: SoloMode): void {
     this.soloMode = mode;
     this.applyBalance();
+    
+    // Invalidate cache
+    this.cacheInvalidated = true;
   }
 
   /**
@@ -610,6 +674,9 @@ private debounce(func: Function, wait: number, key: string): void {
         this.eqEnabled
       );
     }
+    
+    // Invalidate cache
+    this.cacheInvalidated = true;
   }
 
   /**
@@ -624,6 +691,9 @@ private debounce(func: Function, wait: number, key: string): void {
         this.eqEnabled && this.leftEarEnabled
       );
     }
+    
+    // Invalidate cache
+    this.cacheInvalidated = true;
   }
 
   /**
@@ -638,6 +708,9 @@ private debounce(func: Function, wait: number, key: string): void {
         this.eqEnabled && this.rightEarEnabled
       );
     }
+    
+    // Invalidate cache
+    this.cacheInvalidated = true;
   }
 
   /**
@@ -646,6 +719,9 @@ private debounce(func: Function, wait: number, key: string): void {
   public updateSplitEarConfig(config: SplitEarConfig): void {
     this.balance = config.balance;
     this.applyBalance();
+    
+    // Invalidate cache
+    this.cacheInvalidated = true;
   }
 
   /**
@@ -663,6 +739,12 @@ private debounce(func: Function, wait: number, key: string): void {
     leftMagnitudes: Float32Array, 
     rightMagnitudes: Float32Array
   } {
+    // Return cached response if valid and has the same number of points
+    if (!this.cacheInvalidated && this.lastResponseCache && 
+        this.lastResponseCache.frequencies.length === numPoints) {
+      return this.lastResponseCache;
+    }
+    
     const frequencies = new Float32Array(numPoints);
     const leftMagnitudes = new Float32Array(numPoints);
     const rightMagnitudes = new Float32Array(numPoints);
@@ -693,6 +775,10 @@ private debounce(func: Function, wait: number, key: string): void {
           rightMagnitudes[i] = leftMagnitudes[i];
         }
       }
+      
+      // Cache this response
+      this.lastResponseCache = { frequencies, leftMagnitudes, rightMagnitudes };
+      this.cacheInvalidated = false;
       
       return { frequencies, leftMagnitudes, rightMagnitudes };
     }
@@ -782,9 +868,12 @@ private debounce(func: Function, wait: number, key: string): void {
       }
     }
     
+    // Cache this response
+    this.lastResponseCache = { frequencies, leftMagnitudes, rightMagnitudes };
+    this.cacheInvalidated = false;
+    
     return { frequencies, leftMagnitudes, rightMagnitudes };
   }
 }
-
 
 export default AudioEngine;

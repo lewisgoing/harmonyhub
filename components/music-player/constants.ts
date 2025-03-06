@@ -5,14 +5,14 @@ import { Preset, FrequencyBand, Song } from './types';
  * Focused on ranges relevant for tinnitus and speech
  */
 export const DEFAULT_FREQUENCY_BANDS: FrequencyBand[] = [
-  { id: 'band1', frequency: 125, gain: 0, Q: 2.0 },   // Low bass
-  { id: 'band2', frequency: 250, gain: 0, Q: 2.0 },   // Bass
-  { id: 'band3', frequency: 500, gain: 0, Q: 3.0 },   // Low mids
-  { id: 'band4', frequency: 1000, gain: 0, Q: 3.0 },  // Mids
-  { id: 'band5', frequency: 2000, gain: 0, Q: 4.0 },  // Upper mids
-  { id: 'band6', frequency: 4000, gain: 0, Q: 4.0 },  // Presence (common tinnitus range)
-  { id: 'band7', frequency: 8000, gain: 0, Q: 5.0 },  // Brilliance (common tinnitus range)
-  { id: 'band8', frequency: 16000, gain: 0, Q: 4.0 }, // Air
+  { id: 'band1', frequency: 125, gain: 0, Q: 1.0 },   // Low bass
+  { id: 'band2', frequency: 250, gain: 0, Q: 1.0 },   // Bass
+  { id: 'band3', frequency: 500, gain: 0, Q: 1.0 },   // Low mids
+  { id: 'band4', frequency: 1000, gain: 0, Q: 1.0 },  // Mids
+  { id: 'band5', frequency: 2000, gain: 0, Q: 1.0 },  // Upper mids
+  { id: 'band6', frequency: 4000, gain: 0, Q: 1.0 },  // Presence (common tinnitus range)
+  { id: 'band7', frequency: 8000, gain: 0, Q: 1.0 },  // Brilliance (common tinnitus range)
+  { id: 'band8', frequency: 16000, gain: 0, Q: 1.0 }, // Air
 ];
 
 /**
@@ -40,7 +40,12 @@ export const DEFAULT_PRESETS: Record<string, Preset> = {
     },
     bands: DEFAULT_FREQUENCY_BANDS.map(band => {
       if (band.frequency >= 3000 && band.frequency <= 8000) {
-        return { ...band, gain: -12, Q: 2.0 };
+        // For notch filter, use negative gain and high Q value
+        return { 
+          ...band, 
+          gain: -12,  // Deep cut for notch
+          Q: 8.0      // Higher Q for narrower notch width
+        };
       }
       return { ...band, gain: 0 };
     })

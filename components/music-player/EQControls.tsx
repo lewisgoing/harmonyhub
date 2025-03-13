@@ -81,49 +81,52 @@ const EQControls: React.FC<EQControlsProps> = ({
   onStartCalibration
 }) => {
   return (
-    <div className="border-t border-gray-100 pt-4">
-      <Tabs 
-        defaultValue={activeTab} 
-        value={activeTab}
-        onValueChange={onTabChange}
-      >
-        <TabsList className="grid grid-cols-2 mb-4">
-          <TabsTrigger value="eq" className="text-xs">
-            <Sliders className="h-3 w-3 mr-1" />
-            Equalizer
-          </TabsTrigger>
-          <TabsTrigger value="settings" className="text-xs">
-          <Settings className="h-3 w-3 mr-1" />
-      Settings
-      <span className="ml-1 text-[9px] bg-blue-100 text-blue-700 px-1 rounded">Soon</span>
-    </TabsTrigger>
-        </TabsList>
+<div className="border-t border-gray-100 pt-4">
+  <Tabs 
+    defaultValue={activeTab} 
+    value={activeTab}
+    onValueChange={onTabChange}
+  >
+    <TabsList className="grid grid-cols-2 mb-4">
+      <TabsTrigger value="eq" className="text-xs">
+        <Sliders className="h-3 w-3 mr-1" />
+        Equalizer
+      </TabsTrigger>
+      <TabsTrigger value="settings" className="text-xs">
+        <Settings className="h-3 w-3 mr-1" />
+        Settings
+        <span className="ml-1 text-[9px] bg-blue-100 text-blue-700 px-1 rounded">Soon</span>
+      </TabsTrigger>
+    </TabsList>
+    
+    <TabsContent value="eq" className="space-y-4">
+      {/* EQ toggle and mode selector */}
+      <div className="flex flex-col sm:flex-row justify-between gap-4">
+        <div className="flex items-center space-x-2">
+          <Switch 
+            checked={isEQEnabled} 
+            onCheckedChange={onEQToggle} 
+            id="eq-toggle"
+          />
+          <label htmlFor="eq-toggle" className="text-sm font-medium">
+            EQ {isEQEnabled ? "On" : "Off"}
+          </label>
+        </div>
         
-        <TabsContent value="eq" className="space-y-4">
-          {/* EQ toggle and mode selector */}
-          <div className="flex justify-between items-center">
-            <div className="flex items-center space-x-2">
-              <Switch 
-                checked={isEQEnabled} 
-                onCheckedChange={onEQToggle} 
-                id="eq-toggle"
-              />
-              <label htmlFor="eq-toggle" className="text-sm font-medium">
-                EQ {isEQEnabled ? "On" : "Off"}
-              </label>
-            </div>
-            
-            <div className="flex items-center space-x-2">
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={onSplitEarToggle}
-                className="text-xs h-8"
-              >
-                {isSplitEarMode ? "Unified Mode" : "Split Ear Mode"}
-              </Button>
-            </div>
-          </div>
+        <div className="flex items-center space-x-2">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={onSplitEarToggle}
+            className="text-xs h-8"
+          >
+            {isSplitEarMode ? "Unified Mode" : "Split Ear Mode"}
+          </Button>
+        </div>
+      </div>
+      
+
+
           
           {/* Individual ear controls for split ear mode */}
           {isSplitEarMode && onLeftEarToggle && onRightEarToggle && (

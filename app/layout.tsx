@@ -4,7 +4,7 @@ import { Toaster } from '@/components/ui/toaster';
 import AuthProvider from '@/components/auth/AuthProvider';
 
 export const metadata: Metadata = {
-  title: 'Hearing Heroes',
+  title: 'Harmony Hub',
   description: 'Created for INFO Capstone',
   generator: 'hearingheroes.vercel.app',
 };

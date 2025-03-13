@@ -7,8 +7,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import SignupForm from '@/components/auth/SignupForm';
 
 export const metadata: Metadata = {
-  title: 'Login | Hearing Heroes',
-  description: 'Sign in to your Hearing Heroes account',
+  title: 'Login | Harmony Hub',
+  description: 'Sign in to your Harmony Hub account',
 };
 
 export default function LoginPage() {
@@ -28,7 +28,7 @@ export default function LoginPage() {
       <main className="flex-1 flex flex-col items-center justify-center p-4">
         <div className="w-full max-w-md space-y-6">
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold">Hearing Heroes</h1>
+            <h1 className="text-3xl font-bold">Harmony Hub</h1>
             <p className="text-muted-foreground">
               Sign in to save your presets across devices
             </p>

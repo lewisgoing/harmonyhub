@@ -79,7 +79,7 @@ const SplitEarControls: React.FC<SplitEarControlsProps> = ({
   };
 
   return (
-    <div className="space-y-6">
+<div className="space-y-6 md:grid md:grid-cols-2 md:gap-6 md:space-y-0">
       {/* Left ear presets */}
       <div className={`${!isEQEnabled || !leftEarEnabled ? 'opacity-60' : ''}`}>
         <div className="flex items-center justify-between mb-2">
@@ -343,7 +343,9 @@ const SplitEarControls: React.FC<SplitEarControlsProps> = ({
         </Tabs>
       </div>
       
-      <Separator className="opacity-30" />
+      <div className="md:hidden">
+    <Separator className="opacity-30" />
+  </div>
       
       {/* Right ear presets */}
       <div className={`${!isEQEnabled || !rightEarEnabled ? 'opacity-60' : ''}`}>

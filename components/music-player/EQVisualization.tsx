@@ -280,7 +280,13 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
       
       // Set canvas size to fit within the container
       canvasRef.current.width = rect.width - padding * 2;
-      canvasRef.current.height = height - padding * 2;
+      
+      // Calculate height based on screen size (taller on desktop)
+      const computedHeight = window.innerWidth >= 768 ? 
+        Math.min(Math.max(height, rect.width * 0.4), 280) : // Desktop: min height 160px, max 280px
+        height; // Mobile: use the provided height
+      
+      canvasRef.current.height = computedHeight - padding * 2;
       
       // Redraw after resize
       drawEQCurve();
@@ -1235,7 +1241,7 @@ const handleMouseUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
     <div 
       ref={containerRef} 
       className="relative w-full h-full border border-gray-200 rounded-md overflow-hidden"
-      style={{ height }}
+      style={{ height: window.innerWidth >= 768 ? 'auto' : height }}
     >
       {/* Instructions for Q adjustment */}
 

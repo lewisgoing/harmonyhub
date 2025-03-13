@@ -105,7 +105,7 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
               {getVolumeIcon()}
             </Button>
             <Slider 
-              className="w-24"
+              className="w-24 bg-slate-200 h-1.5"
               value={[volume]}
               min={0}
               max={1}
@@ -119,17 +119,16 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
       </div>
       
       <div className="space-y-1">
-        {/* Key difference: Use a completely uncontrolled slider when seeking */}
         <div onPointerDown={handleSliderStart}>
           <Slider
-            defaultValue={[displayProgress]} // Use defaultValue instead of value when possible
-            value={isSeeking ? undefined : [displayProgress]} // Only use controlled value when not seeking
+            defaultValue={[displayProgress]}
+            value={isSeeking ? undefined : [displayProgress]}
             min={0}
             max={100}
             step={0.01}
             onValueChange={handleSliderChange}
             onValueCommit={handleSliderEnd}
-            className="cursor-pointer"
+            className="cursor-pointer bg-slate-600 h-1.5"
           />
         </div>
         <div className="flex justify-between text-xs text-gray-500">

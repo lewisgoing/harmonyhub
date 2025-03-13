@@ -46,15 +46,15 @@ export default function UserProfile() {
 
   if (!user) {
     return (
-      <Button 
-        variant="outline" 
-        size="sm"
-        onClick={() => router.push('/login')}
-        className="text-xs flex items-center gap-1 bg-white"
-      >
-        <Cloud className="h-3 w-3" />
-        Sign in to sync
-      </Button>
+<Button 
+  variant="outline" 
+  size="sm"
+  onClick={() => router.push('/login')}
+  className="text-xs flex items-center gap-1 bg-white text-gray-700 hover:bg-gray-100 border-gray-200"
+>
+  <Cloud className="h-3 w-3" />
+  Sign in to sync
+</Button>
     );
   }
 

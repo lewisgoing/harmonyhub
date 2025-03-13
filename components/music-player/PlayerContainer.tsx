@@ -1129,22 +1129,22 @@ const handleBandChange = (
                             <TooltipProvider key={preset.id}>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button
-                                    className="text-sm font-medium rounded-md shadow-sm transition-colors w-full h-auto py-2 justify-start"
-                                    style={{
-                                      backgroundColor: isActive ? style.active.bg : style.inactive.bg,
-                                      color: isActive ? style.active.text : style.inactive.text,
-                                      border: "none",
-                                    }}
-                                    onClick={() => handleUnifiedPresetSelect(preset)}
-                                  >
-                                    <div className="flex flex-col items-start">
-                                      <span className="font-medium">{preset.name}</span>
-                                      <span className="text-xs opacity-70">
-                                        {preset.description.slice(0, 18)}{preset.description.length > 18 ? '...' : ''}
-                                      </span>
-                                    </div>
-                                  </Button>
+                                <Button
+  className="text-sm font-medium rounded-md shadow-sm transition-colors w-full h-auto py-2 justify-start"
+  style={{
+    backgroundColor: isActive ? style.active.bg : style.inactive.bg,
+    color: isActive ? style.active.text : style.inactive.text,
+    border: "none",
+  }}
+  onClick={() => handleUnifiedPresetSelect(preset)}
+>
+  <div className="flex flex-col items-start w-full overflow-hidden">
+    <span className="font-medium truncate w-full">{preset.name}</span>
+    <span className="text-xs opacity-70 truncate w-full">
+      {preset.description}
+    </span>
+  </div>
+</Button>
                                 </TooltipTrigger>
                                 <TooltipContent side="right">
                                   <p>{preset.description}</p>
@@ -1157,7 +1157,7 @@ const handleBandChange = (
                     </TabsContent>
                     
                     <TabsContent value="tinnitus">
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
                         {Object.values(userPresets)
                           .filter(preset => preset.isCalibrated)
                           .map((preset) => {
@@ -1168,38 +1168,42 @@ const handleBandChange = (
                               <TooltipProvider key={preset.id}>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <Button
-                                      className="text-sm font-medium rounded-md shadow-sm transition-colors w-full h-auto py-2 justify-start"
-                                      style={{
-                                        backgroundColor: isActive ? style.active.bg : style.inactive.bg,
-                                        color: isActive ? style.active.text : style.inactive.text,
-                                        border: "none",
-                                      }}
-                                      onClick={() => handleUnifiedPresetSelect(preset)}
-                                    >
-                                      <div className="flex flex-col items-start">
-                                        <span className="font-medium">{preset.name}</span>
-                                        {preset.tinnitusCenterFreq && (
-                                          <span className="text-xs opacity-70">
-                                            {preset.tinnitusCenterFreq >= 1000 ? 
-                                              `${(preset.tinnitusCenterFreq/1000).toFixed(1)}kHz` : 
-                                              `${preset.tinnitusCenterFreq.toFixed(0)}Hz`}
-                                          </span>
-                                        )}
-                                      </div>
-                                    </Button>
+                                  <Button
+  className="text-sm font-medium rounded-md shadow-sm transition-colors w-full h-auto py-2 justify-start"
+  style={{
+    backgroundColor: isActive ? style.active.bg : style.inactive.bg,
+    color: isActive ? style.active.text : style.inactive.text,
+    border: "none",
+  }}
+  onClick={() => handleUnifiedPresetSelect(preset)}
+>
+  <div className="flex flex-col items-start w-full overflow-hidden">
+    <span className="font-medium truncate w-full">{preset.name}</span>
+    {preset.tinnitusCenterFreq ? (
+      <span className="text-xs opacity-70 truncate w-full">
+        {preset.tinnitusCenterFreq >= 1000 ? 
+          `${(preset.tinnitusCenterFreq/1000).toFixed(1)}kHz` : 
+          `${preset.tinnitusCenterFreq.toFixed(0)}Hz`}
+      </span>
+    ) : (
+      <span className="text-xs opacity-70 truncate w-full">
+        {new Date(preset.dateCreated).toLocaleDateString()}
+      </span>
+    )}
+  </div>
+</Button>
                                   </TooltipTrigger>
-                                  <TooltipContent side="right">
-                                    <div className="space-y-1 max-w-xs">
-                                      <p className="font-medium">{preset.name}</p>
-                                      <p className="text-xs">{preset.description}</p>
-                                      {preset.tinnitusCenterFreq && (
-                                        <p className="text-xs">
-                                          Calibrated for tinnitus at {preset.tinnitusCenterFreq.toFixed(0)}Hz
-                                        </p>
-                                      )}
-                                    </div>
-                                  </TooltipContent>
+                                  <TooltipContent side="right" className="max-w-xs">
+  <div className="space-y-1.5">
+    <p className="font-medium">{preset.name}</p>
+    <p className="text-xs whitespace-normal">{preset.description}</p>
+    {preset.tinnitusCenterFreq && (
+      <p className="text-xs">
+        Calibrated for tinnitus at {preset.tinnitusCenterFreq.toFixed(0)}Hz
+      </p>
+    )}
+  </div>
+</TooltipContent>
                                 </Tooltip>
                                 
                                 {/* Delete button */}
@@ -1264,8 +1268,8 @@ const handleBandChange = (
                                         onClick={() => handleUnifiedPresetSelect(preset)}
                                       >
                                         <div className="flex flex-col items-start">
-                                          <span className="font-medium">{preset.name}</span>
-                                          <span className="text-xs opacity-70">
+                                        <span className="font-medium line-clamp-1 w-full">{preset.name}</span>
+                                        <span className="text-xs opacity-70 line-clamp-1 w-full">
                                             {new Date(preset.dateCreated).toLocaleDateString()}
                                           </span>
                                         </div>
@@ -1327,7 +1331,7 @@ const handleBandChange = (
       </div>
   
       {/* Desktop view - side-by-side layout */}
-      <div className="hidden md:flex min-h-[600px]">
+      <div className="hidden md:flex min-650px]">
         {/* Left column - Player and controls */}
         <div className="w-2/5 lg:w-1/3 bg-slate-800 text-white flex flex-col">
           {/* User profile in top right */}
@@ -1353,16 +1357,18 @@ const handleBandChange = (
             </div>
             
             {/* Player controls */}
-            <div className="w-full max-w-sm">
-              <PlayerControls 
-                playbackState={playbackState}
-                onPlayPause={handlePlayPause}
-                onSeek={handleSeek}
-                onVolumeChange={values => setVolume(values[0])}
-                volume={volume}
-                showVolumeControl={true}
-              />
-            </div>
+{/* Player controls with improved sliders */}
+<div className="w-full max-w-sm dark-theme-slider">
+  <PlayerControls 
+    playbackState={playbackState}
+    onPlayPause={handlePlayPause}
+    onSeek={handleSeek}
+    onVolumeChange={values => setVolume(values[0])}
+    volume={volume}
+    showVolumeControl={true}
+    sliderClassName="bg-slate-500 h-2" // Thicker and lighter for better visibility
+  />
+</div>
             
             {/* Calibration button - ONLY ONE INSTANCE */}
             <Button 
@@ -1517,8 +1523,8 @@ const handleBandChange = (
                                       onClick={() => handleUnifiedPresetSelect(preset)}
                                     >
                                       <div className="flex flex-col items-start">
-                                        <span className="font-medium">{preset.name}</span>
-                                        <span className="text-xs opacity-70">
+                                      <span className="font-medium line-clamp-1">{preset.name}</span>
+                                      <span className="text-xs opacity-70 line-clamp-1 w-[10px]">
                                           {preset.description.slice(0, 18)}{preset.description.length > 18 ? '...' : ''}
                                         </span>
                                       </div>
@@ -1644,8 +1650,8 @@ const handleBandChange = (
                                           onClick={() => handleUnifiedPresetSelect(preset)}
                                         >
                                           <div className="flex flex-col items-start">
-                                            <span className="font-medium">{preset.name}</span>
-                                            <span className="text-xs opacity-70">
+                                          <span className="font-medium line-clamp-1 w-full">{preset.name}</span>
+                                          <span className="text-xs opacity-70 line-clamp-1 w-full">
                                               {new Date(preset.dateCreated).toLocaleDateString()}
                                             </span>
                                           </div>

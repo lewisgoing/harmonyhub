@@ -13,6 +13,7 @@ interface PlayerControlsProps {
   onVolumeChange?: (value: number[]) => void;
   volume?: number;
   showVolumeControl?: boolean;
+  sliderClassName?: string;
 }
 
 const formatTime = (seconds: number): string => {
@@ -28,7 +29,8 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
   onSeek,
   onVolumeChange,
   volume = 1,
-  showVolumeControl = false
+  showVolumeControl = false,
+  sliderClassName,
 }) => {
   const { isPlaying, progress, currentTime, duration, isLoaded } = playbackState;
   
@@ -105,13 +107,13 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
               {getVolumeIcon()}
             </Button>
             <Slider 
-              className="w-24 bg-slate-200 h-1.5"
-              value={[volume]}
-              min={0}
-              max={1}
-              step={0.01}
-              onValueChange={onVolumeChange}
-            />
+  className={`w-24 ${sliderClassName || 'bg-slate-200'}`}
+  value={[volume]}
+  min={0}
+  max={1}
+  step={0.01}
+  onValueChange={onVolumeChange}
+/>
           </div>
         )}
         
@@ -119,18 +121,18 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
       </div>
       
       <div className="space-y-1">
-        <div onPointerDown={handleSliderStart}>
-          <Slider
-            defaultValue={[displayProgress]}
-            value={isSeeking ? undefined : [displayProgress]}
-            min={0}
-            max={100}
-            step={0.01}
-            onValueChange={handleSliderChange}
-            onValueCommit={handleSliderEnd}
-            className="cursor-pointer bg-slate-600 h-1.5"
-          />
-        </div>
+      <div onPointerDown={handleSliderStart}>
+  <Slider
+    defaultValue={[displayProgress]}
+    value={isSeeking ? undefined : [displayProgress]}
+    min={0}
+    max={100}
+    step={0.01}
+    onValueChange={handleSliderChange}
+    onValueCommit={handleSliderEnd}
+    className={`cursor-pointer ${sliderClassName || 'bg-slate-200'}`}
+  />
+</div>
         <div className="flex justify-between text-xs text-gray-500">
           <span>{formatTime(currentTime)}</span>
           <span>{formatTime(duration)}</span>

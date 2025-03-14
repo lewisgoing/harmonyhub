@@ -69,6 +69,7 @@ const CalibrationWizard: React.FC<CalibrationWizardProps> = ({ onComplete, onCan
   
   // Preset name
   const [presetName, setPresetName] = useState('My Tinnitus Relief');
+  const [presetMode, setPresetMode] = useState<'simple' | 'therapeutic'>('therapeutic');
   
   // Reference to keep track of calibration results
   const calibrationResultsRef = useRef<{
@@ -246,72 +247,89 @@ const CalibrationWizard: React.FC<CalibrationWizardProps> = ({ onComplete, onCan
 const createCustomPreset = () => {
   const { frequency, notchDepth, notchWidth } = calibrationResultsRef.current;
 
-  // Use user-selected values instead of enforced ones
   // Format frequency for display
   const formattedFreq = frequency >= 1000 ? 
     `${(frequency/1000).toFixed(1)}kHz` : 
     `${frequency.toFixed(0)}Hz`;
   
-  console.log('Creating calibration preset with user values:', {
+  console.log('Creating calibration preset with mode:', presetMode, {
     frequency,
     notchDepth,
     notchWidth,
     isCalibrated: true
   });
 
-
-  
-  // Create bands with user-selected settings
+  // Create bands based on selected mode
   const customBands: FrequencyBand[] = DEFAULT_FREQUENCY_BANDS.map(band => {
-    // Enhanced algorithm for band selection, especially for 5-7kHz region
-    // For frequencies in the critical 5-7kHz tinnitus range, be more precise
-    const isCriticalRange = frequency >= 5000 && frequency <= 7000;
-    
-    // Use a tighter percentage for the critical range
-    const matchPercentage = isCriticalRange ? 0.15 : 0.2;
-    const distance = Math.abs(band.frequency - frequency);
-    
-    // Check if this band should be modified
-    const isExactMatch = distance < (band.frequency * matchPercentage);
-    const isNeighbor = notchWidth > 0.5 && distance < (band.frequency * 0.4);
-    
-    if (isExactMatch) {
-      // This is the primary band to modify
-      return {
-        ...band,
-        frequency, // Set exact tinnitus frequency
-        gain: notchDepth, // Use user-selected depth
-        Q: notchWidth * 10 // Use user-selected width
-      };
-    } else if (isNeighbor) {
-      // For wide notches, also modify neighboring bands
-      // Apply a milder version of the notch to neighboring bands
-      return {
-        ...band,
-        gain: notchDepth * 0.7, // 70% of primary notch depth
-        Q: notchWidth * 7 // Wider Q for smoother transition
-      };
+    if (presetMode === 'simple') {
+      // Simple notch - only modify the closest band
+      const distance = Math.abs(band.frequency - frequency);
+      const distancePercentage = distance / band.frequency;
+      
+      // Find the band closest to the tinnitus frequency
+      // or a band that's within 20% of the frequency
+      if (distancePercentage < 0.2) {
+        return {
+          ...band,
+          gain: notchDepth, // Apply notch depth
+          Q: notchWidth * 10  // Apply notch width
+        };
+      }
+      
+      // Leave all other bands unchanged
+      return { ...band };
+    } else {
+      // Therapeutic mode - apply the complex algorithm
+      const isCriticalRange = frequency >= 5000 && frequency <= 7000;
+      
+      // Use a tighter percentage for the critical range
+      const matchPercentage = isCriticalRange ? 0.15 : 0.2;
+      const distance = Math.abs(band.frequency - frequency);
+      
+      // Check if this band should be modified
+      const isExactMatch = distance < (band.frequency * matchPercentage);
+      const isNeighbor = notchWidth > 0.5 && distance < (band.frequency * 0.4);
+      
+      if (isExactMatch) {
+        // This is the primary band to modify
+        return {
+          ...band,
+          frequency, // Set exact tinnitus frequency
+          gain: notchDepth, // Use user-selected depth
+          Q: notchWidth * 10 // Use user-selected width
+        };
+      } else if (isNeighbor) {
+        // For wide notches, also modify neighboring bands
+        return {
+          ...band,
+          gain: notchDepth * 0.7, // 70% of primary notch depth
+          Q: notchWidth * 7 // Wider Q for smoother transition
+        };
+      }
+      
+      // Custom EQ shaping based on relationship to tinnitus frequency
+      if (band.frequency > frequency * 1.3) {
+        return { ...band, gain: -2 }; // Slight attenuation above tinnitus
+      } else if (band.frequency < frequency * 0.4) {
+        return { ...band, gain: 3 }; // Mild boost to low frequencies for masking
+      }
+      
+      return { ...band };
     }
-    
-    // Custom EQ shaping based on relationship to tinnitus frequency
-    if (band.frequency > frequency * 1.3) {
-      return { ...band, gain: -2 }; // Slight attenuation above tinnitus
-    } else if (band.frequency < frequency * 0.4) {
-      return { ...band, gain: 3 }; // Mild boost to low frequencies for masking
-    }
-    
-    return band;
   });
   
+  // Descriptive text based on selected mode
+  const description = presetMode === 'simple'
+    ? `Simple notch filter preset at ${formattedFreq} with ${Math.abs(notchDepth)}dB reduction.`
+    : `Personalized tinnitus relief preset with ${Math.abs(notchDepth)}dB notch filter at ${formattedFreq} and enhanced masking. Created through calibration.`;
 
-  
-  console.log('Created bands with user-specified notch filter:', customBands);
+  console.log('Created bands with mode:', presetMode, customBands);
   
   // Create the custom preset
   const customPreset: UserPreset = {
     id: `tinnitus-${Date.now()}`,
     name: presetName || `Tinnitus Relief ${formattedFreq}`,
-    description: `Personalized tinnitus relief preset with ${Math.abs(notchDepth)}dB notch filter at ${formattedFreq}. Created through calibration.`,
+    description: description,
     color: {
       active: { bg: "#8B5CF6", text: "white" },
       inactive: { bg: "#EDE9FE", text: "#6D28D9" }
@@ -324,6 +342,7 @@ const createCustomPreset = () => {
 
   console.group('Tinnitus Preset Creation');
   console.log('User inputs:', calibrationResultsRef.current);
+  console.log('Preset mode:', presetMode);
   console.log('Target frequency:', frequency);
   console.log('Notch depth:', notchDepth);
   console.log('Notch width:', notchWidth);
@@ -344,20 +363,9 @@ const createCustomPreset = () => {
    * Render the current step content
    */
   const renderStepContent = () => {
-    <div className="flex justify-between mb-4">
-  {CALIBRATION_STEPS.map((stepInfo, index) => (
-    <div 
-      key={index}
-      className={`flex-1 h-1 rounded-full mx-0.5 ${
-        index < step 
-          ? 'bg-blue-500' 
-          : index === step 
-            ? 'bg-blue-300' 
-            : 'bg-gray-200'
-      }`}
-    />
-  ))}
-</div>
+
+    
+
     switch (step) {
       case 0: // Welcome
         return (
@@ -412,22 +420,32 @@ const createCustomPreset = () => {
     <div>
       <p className="text-xs text-blue-700 font-medium">Based on Clinical Research</p>
       <p className="text-xs text-blue-600 mt-0.5">
-        Our approach is based on peer-reviewed research by Okamoto (2010) on notched sound therapy for tinnitus management.
+        Our approach is based on peer-reviewed research by Okamoto & Pantev (2012) on notched sound therapy for tinnitus management.
       </p>
       <ul className="text-xs mt-2 space-y-2 list-none pl-0">
-                      <li className="flex items-start gap-1">
-                        <ExternalLink className="h-3 w-3 text-purple-500 flex-shrink-0 mt-0.5" />
-                        <a 
-                          href="https://www.pnas.org/content/107/3/1207" 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-purple-600 hover:underline"
-                        >
-                          Okamoto et al. (2010) - "Listening to tailor-made notched music reduces tinnitus loudness"
-                        </a>
-                      </li>
-
-                    </ul>
+    <li className="flex items-start gap-1">
+      <ExternalLink className="h-3 w-3 text-purple-500 flex-shrink-0 mt-0.5" />
+      <a 
+        href="https://www.pnas.org/content/107/3/1207" 
+        target="_blank" 
+        rel="noopener noreferrer"
+        className="text-purple-600 hover:underline"
+      >
+        Okamoto et al. (2010) - "Listening to tailor-made notched music reduces tinnitus loudness"
+      </a>
+    </li>
+    <li className="flex items-start gap-1">
+      <ExternalLink className="h-3 w-3 text-purple-500 flex-shrink-0 mt-0.5" />
+      <a 
+        href="https://www.frontiersin.org/journals/systems-neuroscience/articles/10.3389/fnsys.2012.00050/full" 
+        target="_blank" 
+        rel="noopener noreferrer"
+        className="text-purple-600 hover:underline"
+      >
+        Pantev et al. (2012) - "Transient auditory plasticity in human auditory cortex induced by tailor-made notched music training"
+      </a>
+    </li>
+  </ul>
     </div>
   </div>
 </motion.div>
@@ -715,7 +733,7 @@ const createCustomPreset = () => {
           </CardContent>
         );
         
-      case 3: // Create EQ preset
+        case 3: // Create EQ preset
         return (
           <CardContent className="space-y-4">
             <motion.p 
@@ -733,37 +751,39 @@ const createCustomPreset = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
             >
-<motion.div 
-  className="space-y-2"
-  initial={{ opacity: 0 }}
-  animate={{ opacity: 1 }}
-  transition={{ delay: 0.3 }}
->
-  <div className="flex justify-between">
-    <Label>Notch Depth</Label>
-    <motion.span 
-      className="text-sm font-mono"
-      key={notchDepth} // Force re-render animation when value changes
-      initial={{ scale: 0.8 }}
-      animate={{ scale: 1 }}
-    >
-      {notchDepth} dB
-    </motion.span>
-  </div>
-  <Slider
-    min={-24}
-    max={0}
-    step={1}
-    value={[notchDepth]}
-    onValueChange={(values) => setNotchDepth(values[0])}
-    className="py-2"
-  />
-  <div className="flex justify-between text-xs">
-    <span>More Relief (-24dB)</span>
-    <span>Less Relief (0dB)</span>
-  </div>
-</motion.div>
+              {/* Notch Depth control */}
+              <motion.div 
+                className="space-y-2"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.3 }}
+              >
+                <div className="flex justify-between">
+                  <Label>Notch Depth</Label>
+                  <motion.span 
+                    className="text-sm font-mono"
+                    key={notchDepth} // Force re-render animation when value changes
+                    initial={{ scale: 0.8 }}
+                    animate={{ scale: 1 }}
+                  >
+                    {notchDepth} dB
+                  </motion.span>
+                </div>
+                <Slider
+                  min={-24}
+                  max={0}
+                  step={1}
+                  value={[notchDepth]}
+                  onValueChange={(values) => setNotchDepth(values[0])}
+                  className="py-2"
+                />
+                <div className="flex justify-between text-xs">
+                  <span>More Relief (-24dB)</span>
+                  <span>Less Relief (0dB)</span>
+                </div>
+              </motion.div>
               
+              {/* Notch Width control */}
               <motion.div 
                 className="space-y-2"
                 initial={{ opacity: 0 }}
@@ -794,13 +814,71 @@ const createCustomPreset = () => {
                   <span>Wide</span>
                 </div>
               </motion.div>
+              
+              {/* Preset Type Selection (moved out to be separate from Notch Depth) */}
+              <motion.div 
+                className="space-y-2 mt-4"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.5 }}
+              >
+                <Label>Preset Type</Label>
+                {/* Radio button style selection for better fit */}
+                <div className="space-y-2">
+                  <div 
+                    className={`flex items-center space-x-2 p-2 rounded-md border cursor-pointer transition-colors ${
+                      presetMode === 'simple' 
+                        ? 'border-blue-300 bg-blue-50' 
+                        : 'border-gray-200 hover:bg-gray-50'
+                    }`}
+                    onClick={() => setPresetMode('simple')}
+                  >
+                    <div className={`w-4 h-4 rounded-full flex items-center justify-center border ${
+                      presetMode === 'simple' 
+                        ? 'border-blue-500' 
+                        : 'border-gray-300'
+                    }`}>
+                      {presetMode === 'simple' && (
+                        <div className="w-2 h-2 rounded-full bg-blue-500" />
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">Simple Notch Filter</p>
+                      <p className="text-xs text-gray-500">Only reduces the tinnitus frequency</p>
+                    </div>
+                  </div>
+                  
+                  <div 
+                    className={`flex items-center space-x-2 p-2 rounded-md border cursor-pointer transition-colors ${
+                      presetMode === 'therapeutic' 
+                        ? 'border-purple-300 bg-purple-50' 
+                        : 'border-gray-200 hover:bg-gray-50'
+                    }`}
+                    onClick={() => setPresetMode('therapeutic')}
+                  >
+                    <div className={`w-4 h-4 rounded-full flex items-center justify-center border ${
+                      presetMode === 'therapeutic' 
+                        ? 'border-purple-500' 
+                        : 'border-gray-300'
+                    }`}>
+                      {presetMode === 'therapeutic' && (
+                        <div className="w-2 h-2 rounded-full bg-purple-500" />
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">Therapeutic EQ</p>
+                      <p className="text-xs text-gray-500">Enhanced curve with masking effects</p>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
             </motion.div>
             
             <motion.div 
               className="flex items-center gap-2"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ delay: 0.5 }}
+              transition={{ delay: 0.6 }}
             >
               <Switch
                 id="test-tone"
@@ -842,11 +920,73 @@ const createCustomPreset = () => {
               </p>
             </motion.div>
             
+            {/* New UI for preset type selection */}
+{/* Standard preset selection cards for preset type */}
+<motion.div
+  className="space-y-2"
+  initial={{ opacity: 0, y: 20 }}
+  animate={{ opacity: 1, y: 0 }}
+  transition={{ delay: 0.3 }}
+>
+  <Label>Preset Type</Label>
+  <div className="flex flex-col space-y-2">
+    <div 
+      onClick={() => setPresetMode('simple')}
+      className={`px-3 py-2 rounded-md cursor-pointer transition-all ${
+        presetMode === 'simple' 
+          ? 'bg-blue-100 border border-blue-300 ring-1 ring-blue-300' 
+          : 'bg-gray-50 border border-gray-200 hover:bg-gray-100'
+      }`}
+    >
+      <div className="flex items-center">
+        <div className={`w-4 h-4 rounded-full mr-2 ${
+          presetMode === 'simple' ? 'bg-blue-500' : 'bg-gray-300'
+        }`} />
+        <div className="font-medium text-sm">Simple Notch Filter</div>
+      </div>
+      <div className="text-xs ml-6 mt-0.5 text-gray-600">
+        Only reduces the tinnitus frequency
+      </div>
+    </div>
+    
+    <div 
+      onClick={() => setPresetMode('therapeutic')}
+      className={`px-3 py-2 rounded-md cursor-pointer transition-all ${
+        presetMode === 'therapeutic' 
+          ? 'bg-purple-100 border border-purple-300 ring-1 ring-purple-300' 
+          : 'bg-gray-50 border border-gray-200 hover:bg-gray-100'
+      }`}
+    >
+      <div className="flex items-center">
+        <div className={`w-4 h-4 rounded-full mr-2 ${
+          presetMode === 'therapeutic' ? 'bg-purple-500' : 'bg-gray-300'
+        }`} />
+        <div className="font-medium text-sm">Therapeutic EQ</div>
+      </div>
+      <div className="text-xs ml-6 mt-0.5 text-gray-600">
+        Enhanced curve with masking effects
+      </div>
+    </div>
+  </div>
+  
+  <div className={`text-xs p-2 rounded-md mt-2 ${
+    presetMode === 'simple' 
+      ? 'bg-blue-50 text-blue-700' 
+      : 'bg-purple-50 text-purple-700'
+  }`}>
+    <p>
+      {presetMode === 'simple'
+        ? "Creates a clean notch at your tinnitus frequency without additional adjustments."
+        : "Adds gentle masking and enhances low frequencies based on research for better relief."}
+    </p>
+  </div>
+</motion.div>
+            
             <motion.div 
               className="bg-purple-50 p-4 rounded-xl shadow-sm border border-purple-200"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
+              transition={{ delay: 0.4 }}
             >
               <h4 className="font-medium mb-2 flex items-center text-purple-800">
                 <Headphones className="h-4 w-4 mr-2" />
@@ -857,7 +997,7 @@ const createCustomPreset = () => {
                   className="flex justify-between"
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.4 }}
+                  transition={{ delay: 0.5 }}
                 >
                   <span>Frequency:</span>
                   <span className="font-mono font-medium">
@@ -867,32 +1007,46 @@ const createCustomPreset = () => {
                   </span>
                 </motion.li>
                 <motion.li 
-  className="flex justify-between"
-  initial={{ opacity: 0, x: -10 }}
-  animate={{ opacity: 1, x: 0 }}
-  transition={{ delay: 0.5 }}
->
-  <span>Notch Depth:</span>
-  <span className="font-mono font-medium">{notchDepth} dB</span>
-</motion.li>
-                <motion.li 
                   className="flex justify-between"
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.6 }}
                 >
+                  <span>Notch Depth:</span>
+                  <span className="font-mono font-medium">{notchDepth} dB</span>
+                </motion.li>
+                <motion.li 
+                  className="flex justify-between"
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.7 }}
+                >
                   <span>Notch Width:</span>
                   <span className="font-mono font-medium">Q = {(notchWidth * 10).toFixed(1)}</span>
                 </motion.li>
+                <motion.li 
+                  className="flex justify-between"
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.8 }}
+                >
+                  <span>Preset Type:</span>
+                  <span className="font-medium">
+                    {presetMode === 'simple' ? 'Simple Notch' : 'Therapeutic EQ'}
+                  </span>
+                </motion.li>
               </ul>
               <div className="mt-3 text-xs bg-purple-100 p-2 rounded text-purple-700">
-                This preset applies a precise notch filter at your tinnitus frequency to provide relief while listening to music.
+                {presetMode === 'simple' 
+                  ? "This preset applies a precise notch filter at your tinnitus frequency."
+                  : "This preset applies a precise notch filter at your tinnitus frequency with additional adjustments to provide better relief."}
               </div>
             </motion.div>
           </CardContent>
-        );        
+        );
+         
         
-      case 5: // Complete
+        case 5: // Complete
         return (
           <CardContent className="space-y-4">
             <motion.div 
@@ -921,13 +1075,35 @@ const createCustomPreset = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4 }}
             >
-              You can now enjoy music with reduced tinnitus interference.     Your preset will be saved and can be accessed in the "Tinnitus" tab of presets.
+              You can now enjoy music with reduced tinnitus interference.
+              Your preset will be saved and can be accessed in the "Tinnitus" tab of presets.
             </motion.p>
+            
+            <motion.div 
+              className="bg-gray-100 p-3 rounded-md text-sm"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
+            >
+              <div className="flex gap-2 items-center">
+                <span className={`px-2 py-0.5 rounded-full text-xs ${
+                  presetMode === 'simple' 
+                    ? 'bg-blue-100 text-blue-800' 
+                    : 'bg-purple-100 text-purple-800'
+                }`}>
+                  {presetMode === 'simple' ? 'Simple Notch' : 'Therapeutic EQ'}
+                </span>
+                <span>at {customFrequency < 1000 ? 
+                  `${customFrequency.toFixed(0)} Hz` : 
+                  `${(customFrequency/1000).toFixed(1)} kHz`}
+                </span>
+              </div>
+            </motion.div>
             
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5 }}
+              transition={{ delay: 0.6 }}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
             >

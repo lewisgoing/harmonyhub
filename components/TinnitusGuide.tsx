@@ -319,25 +319,35 @@ export const TinnitusGuide = () => {
                   </div>
                   
                   <div className="p-3 bg-purple-50 rounded-md">
-                    <h4 className="text-sm font-medium text-purple-800 flex items-center gap-1">
-                      <BookOpen className="h-3 w-3" />
-                      Research Article
-                    </h4>
-                    <ul className="text-xs mt-2 space-y-2 list-none pl-0">
-                      <li className="flex items-start gap-1">
-                        <ExternalLink className="h-3 w-3 text-purple-500 flex-shrink-0 mt-0.5" />
-                        <a 
-                          href="https://www.pnas.org/content/107/3/1207" 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-purple-600 hover:underline"
-                        >
-                          Okamoto et al. (2010) - "Listening to tailor-made notched music reduces tinnitus loudness"
-                        </a>
-                      </li>
-
-                    </ul>
-                  </div>
+  <h4 className="text-sm font-medium text-purple-800 flex items-center gap-1">
+    <BookOpen className="h-3 w-3" />
+    Research Articles
+  </h4>
+  <ul className="text-xs mt-2 space-y-2 list-none pl-0">
+    <li className="flex items-start gap-1">
+      <ExternalLink className="h-3 w-3 text-purple-500 flex-shrink-0 mt-0.5" />
+      <a 
+        href="https://www.pnas.org/content/107/3/1207" 
+        target="_blank" 
+        rel="noopener noreferrer"
+        className="text-purple-600 hover:underline"
+      >
+        Okamoto et al. (2010) - "Listening to tailor-made notched music reduces tinnitus loudness"
+      </a>
+    </li>
+    <li className="flex items-start gap-1">
+      <ExternalLink className="h-3 w-3 text-purple-500 flex-shrink-0 mt-0.5" />
+      <a 
+        href="https://www.frontiersin.org/journals/systems-neuroscience/articles/10.3389/fnsys.2012.00050/full" 
+        target="_blank" 
+        rel="noopener noreferrer"
+        className="text-purple-600 hover:underline"
+      >
+        Pantev et al. (2012) - "Transient auditory plasticity in human auditory cortex induced by tailor-made notched music training"
+      </a>
+    </li>
+  </ul>
+</div>
                   
                   <div className="p-3 bg-green-50 rounded-md">
                     <h4 className="text-sm font-medium text-green-800 flex items-center gap-1">

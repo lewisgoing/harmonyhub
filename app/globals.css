@@ -23,11 +23,101 @@ body {
 }
 
 /* Add touch-friendly styles for mobile EQ points */
+/* In app/globals.css - Add these styles */
+
+/* Mobile optimizations */
 @media (max-width: 768px) {
-  .eq-point {
-    /* Increase the hit area */
-    transform: scale(1.5);
+  /* Base container improvements */
+  .mobile-container {
+    @apply px-2 py-3;
   }
+  
+  /* Improved slider styles for mobile */
+  .player-slider-mobile .SliderTrack {
+    @apply h-2;
+  }
+  
+  .player-slider-mobile .SliderRange {
+    @apply bg-blue-500;
+  }
+  
+  .player-slider-mobile .SliderThumb {
+    @apply h-5 w-5 bg-blue-500 border-2 border-white;
+  }
+  
+  /* Improve EQ visualization for touch */
+  .eq-visualization {
+    @apply touch-manipulation;
+  }
+  
+  .eq-visualization canvas {
+    @apply rounded-lg shadow-sm;
+  }
+  
+  /* Better touch targets */
+  .touch-target {
+    @apply min-h-[44px] min-w-[44px];
+  }
+  
+  /* More compact headers on mobile */
+  .card-header-mobile {
+    @apply py-2 px-3;
+  }
+  
+  /* Improved mobile tabs */
+  .tabs-mobile .TabsTrigger {
+    @apply h-9 text-xs py-1.5;
+  }
+  
+  /* Increase contrast for accessibility */
+  .high-contrast-mobile {
+    @apply text-gray-900 bg-white;
+  }
+  
+  /* Better tap targets for buttons */
+  button, 
+  .button,
+  [role="button"] {
+    @apply touch-manipulation;
+  }
+  
+  /* Finger-sized tap areas */
+  .tap-area {
+    @apply min-h-[36px] min-w-[36px];
+  }
+  
+  /* Enhance EQ points for touch */
+  .eq-point {
+    transform: scale(1.75);
+    touch-action: manipulation;
+  }
+  
+  /* Optimize dialogs for mobile */
+  .mobile-dialog {
+    @apply p-3 max-h-[95vh] w-[calc(100vw-24px)] overflow-hidden;
+  }
+  
+  .mobile-dialog-content {
+    @apply max-h-[80vh] overflow-y-auto p-3;
+  }
+}
+
+/* Better styles for sliders regardless of screen size */
+.player-slider .SliderTrack {
+  @apply h-1.5 bg-gray-200;
+}
+
+.player-slider .SliderRange {
+  @apply bg-white;
+}
+
+.player-slider .SliderThumb {
+  @apply h-4 w-4 bg-white border border-gray-300;
+}
+
+/* Animation for sliders */
+.slider-active .SliderThumb {
+  @apply scale-110 transition-transform shadow-md;
 }
 
 @keyframes subtle-pulse {

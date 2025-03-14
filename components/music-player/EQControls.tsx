@@ -26,9 +26,9 @@ interface EQControlsProps {
   splitEarConfig: SplitEarConfig;
   leftEarEnabled?: boolean;
   rightEarEnabled?: boolean;
-  maxGainRange: 12 | 24 | 36;
+  maxGainRange: 12 | 24 | 36 | 48;
   maxQValue: 10 | 20 | 30;
-  onMaxGainRangeChange: (value: 12 | 24 | 36) => void;
+  onMaxGainRangeChange: (value: 12 | 24 | 36 | 48) => void;
   onMaxQValueChange: (value: 10 | 20 | 30) => void;
   
   // Visualization settings
@@ -62,7 +62,7 @@ const EQControls: React.FC<EQControlsProps> = ({
   splitEarConfig,
   leftEarEnabled = true,
   rightEarEnabled = true,
-  dbRange = 24,
+  dbRange = 48,
   onDbRangeChange,
   onEQToggle,
   onSplitEarToggle,

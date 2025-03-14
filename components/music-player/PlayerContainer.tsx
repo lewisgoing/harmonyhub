@@ -54,6 +54,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { Switch } from '../ui/switch';
 import TinnitusGuide from '../TinnitusGuide';
 
+
 /**
 * Main Music Player Container Component
 */
@@ -1018,32 +1019,47 @@ const handleBandChange = (
       
 {/* Mobile view */}
 <div className="md:hidden">
-  {/* Simplified controls for mobile */}
   <div className="flex flex-col space-y-4 p-4">
-    {/* Simplified EQ controls for mobile */}
-    <div className="flex justify-between items-center">
-      <div className="flex items-center space-x-2">
-        <Switch 
-          checked={isEQEnabled} 
-          onCheckedChange={handleEQToggle} 
-          id="eq-toggle-mobile"
+    {/* Album info and player controls */}
+    <div className="flex items-center space-x-4">
+      <div className="w-16 h-16 rounded-md overflow-hidden flex-shrink-0">
+        <img 
+          src={currentSong.cover} 
+          alt="Album cover" 
+          className="w-full h-full object-cover" 
         />
-        <label htmlFor="eq-toggle-mobile" className="text-sm font-medium">
-          EQ {isEQEnabled ? "On" : "Off"}
-        </label>
       </div>
-      
-      <Button 
-        variant="outline" 
-        size="sm"
-        onClick={handleSplitEarToggle}
-        className="text-xs"
-      >
-        {isSplitEarMode ? "Unified" : "Split Ear"} 
-      </Button>
+      <div className="flex-1 min-w-0">
+        <h3 className="text-sm font-medium truncate">{currentSong.name}</h3>
+        <p className="text-xs text-gray-500 truncate">{currentSong.author}</p>
+        
+        {/* Mobile EQ toggle and mode switcher */}
+        <div className="flex items-center gap-2 mt-1">
+          <div className="flex items-center space-x-1">
+            <Switch 
+              checked={isEQEnabled} 
+              onCheckedChange={handleEQToggle} 
+              id="eq-toggle-mobile"
+              className="scale-75"
+            />
+            <label htmlFor="eq-toggle-mobile" className="text-xs">
+              EQ {isEQEnabled ? "On" : "Off"}
+            </label>
+          </div>
+          
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={handleSplitEarToggle}
+            className="text-xs h-7 px-2"
+          >
+            {isSplitEarMode ? "Unified" : "Split Ear"} 
+          </Button>
+        </div>
+      </div>
     </div>
     
-    {/* Simplified player controls for mobile */}
+    {/* Mobile player controls */}
     <PlayerControls 
       playbackState={playbackState}
       onPlayPause={handlePlayPause}
@@ -1051,8 +1067,100 @@ const handleBandChange = (
       onVolumeChange={values => setVolume(values[0])}
       volume={volume}
       showVolumeControl={true}
-      sliderClassName="player-slider-mobile" // Add this class
+      sliderClassName="player-slider-mobile"
     />
+    
+    {/* Mobile EQ visualization */}
+    <div className="relative mb-4 mt-2">
+      <EQVisualization 
+        isEQEnabled={isEQEnabled}
+        isSplitEarMode={isSplitEarMode}
+        unifiedBands={unifiedBands}
+        leftEarBands={leftEarBands}
+        rightEarBands={rightEarBands}
+        leftEarEnabled={leftEQEnabled}
+        rightEarEnabled={rightEQEnabled}
+        frequencyResponseData={frequencyResponseData}
+        onBandChange={handleBandChange}
+        onFrequencyChange={handleFrequencyChange}
+        height={160} // Shorter for mobile
+        minGain={-24}
+        maxGain={24}
+        allowXDragging={true}
+        allowYDragging={true}
+      />
+    </div>
+    
+    {/* Mobile calibration button */}
+    <div className="grid grid-cols-2 gap-2">
+      <Button 
+        variant="default" 
+        className="bg-blue-600 hover:bg-blue-700 text-white"
+        onClick={() => setIsCalibrationOpen(true)}
+      >
+        <Headphones className="h-4 w-4 mr-2" />
+        Calibration
+      </Button>
+      <TinnitusHelpButton />
+    </div>
+    
+    {/* Simplified tab system for mobile */}
+    <Tabs defaultValue="presets" className="mt-2">
+      <TabsList className="grid grid-cols-2 w-full">
+        <TabsTrigger value="presets">Presets</TabsTrigger>
+        <TabsTrigger value="eqcontrols">Controls</TabsTrigger>
+      </TabsList>
+      
+      <TabsContent value="presets" className="pt-4">
+        {isSplitEarMode ? (
+          <SplitEarControls 
+            builtInPresets={presets}
+            userPresets={userPresets}
+            splitEarConfig={splitEarConfig}
+            onLeftEarPresetSelect={handleLeftEarPresetSelect}
+            onRightEarPresetSelect={handleRightEarPresetSelect}
+            onDeletePreset={handleDeletePreset}
+            onSaveLeftEarPreset={handleSaveLeftEarEQ}
+            onSaveRightEarPreset={handleSaveRightEarEQ}
+            isEQEnabled={isEQEnabled}
+            leftEarEnabled={leftEQEnabled}
+            rightEarEnabled={rightEQEnabled}
+          />
+        ) : (
+          <Presets 
+            presets={presets}
+            userPresets={userPresets}
+            activePresetId={unifiedPresetId}
+            onPresetSelect={handleUnifiedPresetSelect}
+            onDeletePreset={handleDeletePreset}
+            onSavePreset={handleSaveCurrentEQ}
+            showUserPresets={true}
+          />
+        )}
+      </TabsContent>
+      
+      <TabsContent value="eqcontrols" className="pt-4">
+        <EQControls 
+          isEQEnabled={isEQEnabled}
+          isSplitEarMode={isSplitEarMode}
+          splitEarConfig={splitEarConfig}
+          leftEarEnabled={leftEQEnabled}
+          rightEarEnabled={rightEQEnabled}
+          onEQToggle={handleEQToggle}
+          onSplitEarToggle={handleSplitEarToggle}
+          onLeftEarToggle={handleLeftEQToggle}
+          onRightEarToggle={handleRightEQToggle}
+          onBalanceChange={handleBalanceChange}
+          onResetEQ={handleResetEQ}
+          maxQValue={maxQValue}
+          onMaxQValueChange={setMaxQValue}
+          maxGainRange={maxGainRange}
+          onMaxGainRangeChange={setMaxGainRange}
+          onSavePreset={handleSaveCurrentEQ}
+          showCalibration={false}
+        />
+      </TabsContent>
+    </Tabs>
   </div>
 </div>
   

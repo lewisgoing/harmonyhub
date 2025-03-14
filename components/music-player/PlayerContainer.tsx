@@ -1522,9 +1522,9 @@ const handleBandChange = (
                                       }}
                                       onClick={() => handleUnifiedPresetSelect(preset)}
                                     >
-                                      <div className="flex flex-col items-start">
+                                      <div className="flex flex-col items-start overflow-hidden">
                                       <span className="font-medium line-clamp-1">{preset.name}</span>
-                                      <span className="text-xs opacity-70 line-clamp-1 w-[10px]">
+                                      <span className="text-xs opacity-70">
                                           {preset.description.slice(0, 18)}{preset.description.length > 18 ? '...' : ''}
                                         </span>
                                       </div>

@@ -1,4 +1,5 @@
 import dynamic from 'next/dynamic';
+import WelcomeScreen from '@/components/WelcomeScreen';
 
 // Import the default export from PlayerContainer directly
 const MusicPlayer = dynamic(
@@ -20,6 +21,9 @@ export default function Page() {
       <footer className="mt-8 text-center text-sm text-gray-500">
         <p>© {new Date().getFullYear()} Harmony Hub. All rights reserved.</p>
       </footer>
+      
+      {/* Welcome screen for first-time visitors */}
+      <WelcomeScreen />
     </div>
   );
 }

@@ -3,20 +3,12 @@ import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import AuthProvider from '@/components/auth/AuthProvider';
 import { Inter } from 'next/font/google'
+import { OnboardingContextProvider } from '@/contexts/onboarding-context';
+import OnboardingTourContainer from '@/components/OnboardingTourContainer';
 
 export const metadata = {
   title: 'Harmony Hub',
   description: 'Created for INFO Capstone 24-25 by the Hearing Heroes',
-  // icons: {
-  //   icon: [
-  //     { url: '/favicon.ico', sizes: 'any' },
-  //     { url: '/favicon-16x16.png', sizes: '16x16' },
-  //     { url: '/favicon-32x32.png', sizes: '32x32' },
-  //   ],
-  //   apple: [
-  //     { url: '/apple-touch-icon.png', sizes: '180x180' },
-  //   ],
-  // },
 }
 
 const inter = Inter({
@@ -33,12 +25,15 @@ export default function RootLayout({
   return (
     <html lang="en" className={inter.variable}>
       <head>
-      <meta name="apple-mobile-web-app-title" content="Harmony Hub" />
+        <meta name="apple-mobile-web-app-title" content="Harmony Hub" />
       </head>
       <body>
         <AuthProvider>
-          {children}
-          <Toaster />
+          <OnboardingContextProvider>
+            {children}
+            <OnboardingTourContainer />
+            <Toaster />
+          </OnboardingContextProvider>
         </AuthProvider>
       </body>
     </html>

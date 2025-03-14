@@ -90,7 +90,7 @@ const getVolumeIcon = () => {
         <div className="w-10" />
         
         <Button 
-          className="w-12 h-12 rounded-full bg-black text-white flex items-center justify-center hover:bg-gray-800 transition-colors"
+          className="w-12 h-12 rounded-full bg-black text-white flex items-center justify-center hover:bg-gray-800 transition-colors player-controls-play-button"
           onClick={onPlayPause}
         >
           {isPlaying ? <Pause size={24} fill="white" /> : <Play size={24} fill="white" />}

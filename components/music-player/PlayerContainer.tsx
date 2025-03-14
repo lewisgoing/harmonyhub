@@ -54,6 +54,11 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { Switch } from '../ui/switch';
 import TinnitusGuide from '../TinnitusGuide';
 
+import { HelpButton } from '@/components/HelpButton';
+import { useOnboardingContext } from '@/contexts/onboarding-context';
+import TinnitusCalibrationGuide from '@/components/TinnitusCalibrationGuide';
+import FeatureGuide from '@/components/FeatureGuide';
+
 
 /**
 * Main Music Player Container Component
@@ -61,10 +66,13 @@ import TinnitusGuide from '../TinnitusGuide';
 const PlayerContainer: React.FC = () => {
   const { toast } = useToast();
   const { user } = useAuthContext();
+  const { openOnboarding } = useOnboardingContext();
 
   // EQ state
   const [isEQEnabled, setIsEQEnabled] = useState(true);
   const [isSplitEarMode, setIsSplitEarMode] = useState(false);
+
+  const [isCalibrationGuideOpen, setIsCalibrationGuideOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('eq');
   const [showSavePresetDialog, setShowSavePresetDialog] = useState(false);
   const [newPresetName, setNewPresetName] = useState('My Custom Preset');
@@ -183,6 +191,15 @@ const isMobile = useIsMobile(); // This comes from your existing hooks/use-mobil
     leftMagnitudes: Float32Array;
     rightMagnitudes: Float32Array;
   } | undefined>(undefined);
+
+  const startCalibration = () => {
+    setIsCalibrationGuideOpen(true);
+  };
+  
+  const handleStartCalibrationAfterGuide = () => {
+    // This will be called after the guide is dismissed
+    setIsCalibrationOpen(true);
+  };
 
   useEffect(() => {
     if (audioEngine && !frequencyResponseData) {
@@ -1029,6 +1046,29 @@ const handleBandChange = (
   };
 
   return (
+    <>
+      {/* Calibration Guide Dialog */}
+  <TinnitusCalibrationGuide
+  open={isCalibrationGuideOpen}
+  onOpenChange={setIsCalibrationGuideOpen}
+  onStartCalibration={handleStartCalibrationAfterGuide}
+/>
+
+{/* Onboarding Button - Mobile */}
+<div className="md:hidden absolute bottom-4 right-4">
+  <div className="flex gap-2">
+    <HelpButton />
+    <FeatureGuide />
+  </div>
+</div>
+
+{/* Onboarding Button - Desktop */}
+<div className="hidden md:block absolute bottom-4 right-4">
+  <div className="flex gap-2">
+    <HelpButton />
+    <FeatureGuide />
+  </div>
+</div>
     <Card className="w-full max-w-full sm:max-w-3xl md:max-w-5xl lg:max-w-6xl overflow-hidden bg-white rounded-xl shadow-lg">
       {/* Hidden audio element */}
       <audio ref={audioRef} />
@@ -1067,7 +1107,7 @@ const handleBandChange = (
             variant="outline" 
             size="sm"
             onClick={handleSplitEarToggle}
-            className="text-xs h-7 px-2"
+            className="text-xs h-7 px-2 split-ear-toggle"
           >
             {isSplitEarMode ? "Unified" : "Split Ear"} 
           </Button>
@@ -1087,8 +1127,9 @@ const handleBandChange = (
     />
     
     {/* Mobile EQ visualization */}
-    <div className="relative mb-4 mt-2">
+    <div className="relative mb-4 mt-2 eq-visualization">
       <EQVisualization 
+      
         isEQEnabled={isEQEnabled}
         isSplitEarMode={isSplitEarMode}
         unifiedBands={unifiedBands}
@@ -1238,7 +1279,7 @@ const handleBandChange = (
         className="mt-6 bg-blue-600 hover:bg-blue-700 text-white w-full"
         onClick={() => setIsCalibrationOpen(true)}
       >
-        <Headphones className="h-4 w-4 mr-2" />
+        <Headphones className="h-4 w-4 mr-2 tinnitus-calibration-button" />
         Calibrate for Tinnitus
       </Button>
 
@@ -1651,6 +1692,7 @@ const handleBandChange = (
 
       
     </Card>
+    </>
   );
 };
 

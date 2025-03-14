@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 body {
-  font-family: Arial, Helvetica, sans-serif;
+  /* font-family: Arial, Helvetica, sans-serif; */
 }
 
 @layer utilities {
@@ -21,6 +21,9 @@ body {
 
 
 @layer base {
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+  }
   :root {
     --background: 0 0% 100%;
     --foreground: 0 0% 3.9%;

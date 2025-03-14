@@ -39,8 +39,8 @@ export default function CloudPromotion({ trigger = 'general' }: CloudPromotionPr
 
   return (
     <Alert className="my-2 bg-blue-50 text-blue-800 border-blue-200">
-      <CloudOff className="h-4 w-4 text-blue-500" />
-      <AlertDescription className="flex items-center justify-between">
+      <CloudOff className="h-4 w-4 text-blue-500 mt-3" />
+      <AlertDescription className="flex items-center justify-between mt-2">
         <span>{getMessage()}</span>
         <div className="flex gap-2">
           <Button 

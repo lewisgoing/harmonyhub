@@ -79,11 +79,11 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
     }
   };
 
-  const getVolumeIcon = () => {
-    if (volume === 0) return <VolumeX size={18} />;
-    if (volume < 0.5) return <Volume1 size={18} />;
-    return <Volume2 size={18} />;
-  };
+const getVolumeIcon = () => {
+  if (volume === 0) return <VolumeX size={18} stroke="white" fill="white" />;
+  if (volume < 0.5) return <Volume1 size={18} stroke="white" fill="white" />;
+  return <Volume2 size={18} stroke="white" fill="white" />;
+};
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">

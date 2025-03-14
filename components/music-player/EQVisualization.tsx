@@ -68,7 +68,7 @@ const RIGHT_EAR_COLOR = '#ef4444'; // Red
 const DISABLED_OPACITY = 0.4;
 const GRID_COLOR = '#e9ecef';
 const ZERO_LINE_COLOR = '#ced4da';
-const FREQUENCY_LABELS = ['60Hz', '250Hz', '1kHz', '2kHz', '4kHz', '8kHz', '12kHz', '16kHz'];
+const FREQUENCY_LABELS = ['          60Hz', '250Hz', '1kHz', '2kHz', '4kHz', '8kHz', '12kHz', '16kHz           '];
 const FREQUENCY_POSITIONS = [60, 250, 1000, 2000, 4000, 8000, 12000, 16000];
 const DB_RANGE = 48; // +/- 24dB
 
@@ -279,7 +279,7 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
       const padding = 4; // Account for padding in container
       
       // Set canvas size to fit within the container
-      canvasRef.current.width = rect.width - padding * 2;
+      canvasRef.current.width = rect.width - padding * 2 - 10;
       
       // Calculate height based on screen size (taller on desktop)
       const computedHeight = window.innerWidth >= 768 ? 
@@ -406,15 +406,34 @@ const xMin = freqToX(tinnitusMinFreq, width);
 const xMax = freqToX(tinnitusMaxFreq, width);
 
 // Draw a subtle background highlight
-ctx.fillStyle = 'rgba(255, 240, 245, 0.4)'; // Very light pink
+ctx.fillStyle = 'rgba(255, 200, 200, 0.25)'; // Very light pink
 ctx.fillRect(xMin, 0, xMax - xMin, height);
 
+ctx.strokeStyle = 'rgba(220, 50, 50, 0.15)';
+ctx.lineWidth = 1;
+ctx.setLineDash([3, 3]); // Create a dashed line
+
+// Draw left vertical line
+ctx.beginPath();
+ctx.moveTo(xMin, 0);
+ctx.lineTo(xMin, height);
+ctx.stroke();
+
+// Draw right vertical line
+ctx.beginPath();
+ctx.moveTo(xMax, 0);
+ctx.lineTo(xMax, height);
+ctx.stroke();
+
+// Reset to solid line for other drawing operations
+ctx.setLineDash([]);
+
+
 // Add a small text label
-ctx.fillStyle = 'rgba(220, 50, 50, 0.7)';
-ctx.font = '9px system-ui';
+ctx.fillStyle = 'rgba(220, 50, 50, 0.8)';
+ctx.font = 'bold 10px system-ui';
 ctx.textAlign = 'center';
-ctx.fillText('Common Tinnitus Range', (xMin + xMax) / 2, height - 20);
-    
+ctx.fillText('Common Tinnitus Range (3-8kHz)', (xMin + xMax) / 2, height - 40);    
     // Draw zero line with a different color
     ctx.strokeStyle = ZERO_LINE_COLOR;
     ctx.lineWidth = 2;

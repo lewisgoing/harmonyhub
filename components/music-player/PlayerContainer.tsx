@@ -51,6 +51,8 @@ import { createAudioElementControls } from '@/utils/playerControls';
 import { useToast } from '../ui/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { Switch } from '../ui/switch';
+import TinnitusGuide from '../TinnitusGuide';
 
 /**
 * Main Music Player Container Component
@@ -69,6 +71,8 @@ const PlayerContainer: React.FC = () => {
   // Left/Right ear individual EQ enabled state
   const [leftEQEnabled, setLeftEQEnabled] = useState(true);
   const [rightEQEnabled, setRightEQEnabled] = useState(true);
+
+  const [modeTransition, setModeTransition] = useState(false);
 
   // Get presets from hook
   const { 
@@ -854,11 +858,26 @@ const handleBandChange = (
       // Set active tab to "eq" so we see the EQ controls
       setActiveTab('eq');
       
+      // Visual feedback - using a more noticeable toast
       toast({
-        title: "Calibration Complete",
-        description: `Your personalized tinnitus relief preset has been created and applied. It's designed specifically for your ${preset.tinnitusCenterFreq && preset.tinnitusCenterFreq >= 1000 ? 
-          `${(preset.tinnitusCenterFreq/1000).toFixed(1)}kHz` : 
-          `${preset.tinnitusCenterFreq?.toFixed(0)}Hz`} tinnitus frequency.`,
+        title: "✓ Calibration Complete",
+        description: (
+          <div className="space-y-1">
+            <p className="font-medium">
+              Your tinnitus relief preset has been created!
+            </p>
+            <p className="text-sm">
+              Frequency: {preset.tinnitusCenterFreq && preset.tinnitusCenterFreq >= 1000 ? 
+              `${(preset.tinnitusCenterFreq/1000).toFixed(1)}kHz` : 
+              `${preset.tinnitusCenterFreq?.toFixed(0)}Hz`}
+            </p>
+            <p className="text-xs mt-1">
+              Your preset is now active and has been saved in the "Tinnitus" tab.
+            </p>
+          </div>
+        ),
+        variant: "default",
+        className: "bg-purple-100 border-purple-300",
       });
       
       // Add a slight delay before focusing the relevant preset tab
@@ -997,395 +1016,45 @@ const handleBandChange = (
       {/* Hidden audio element */}
       <audio ref={audioRef} />
       
-      {/* Mobile view - stacked layout */}
-      <div className="md:hidden">
-        {/* Album header for mobile */}
-        <CardHeader className="p-0 relative bg-gradient-to-b from-slate-800 to-slate-900 h-56 flex flex-col justify-end">
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
-          
-          {/* User profile button in top right */}
-          <div className="absolute top-4 right-4 z-10">
-            <UserProfile />
-          </div>
-          
-          {/* External audio button in top left */}
-          <div className="absolute top-4 left-4 z-10">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button 
-                    variant="ghost" 
-                    size="icon"
-                    className="rounded-full bg-black/30 text-white hover:bg-white/80"
-                    onClick={() => toast({
-                      title: "Coming Soon!",
-                      description: "Custom audio source support is coming in our next update.",
-                    })}
-                  >
-                    <Music size={16} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Custom audio sources (Coming Soon)</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-          
-          {/* Album cover */}
-          <div className="absolute top-4 left-4 w-36 h-36 rounded-lg overflow-hidden shadow-lg mt-10">
-            <img 
-              src={currentSong.cover} 
-              alt="Album cover" 
-              className="w-full h-full object-cover" 
-            />
-          </div>
-          
-          {/* Track info */}
-          <div className="relative p-4 text-white">
-            <h2 className="text-lg font-bold">{currentSong.name}</h2>
-            <p className="text-sm text-white/80">{currentSong.author}</p>
-          </div>
-        </CardHeader>
-        
-        <CardContent className="p-4 space-y-4">
-          {/* Mobile player controls */}
-<PlayerControls 
-  playbackState={playbackState}
-  onPlayPause={handlePlayPause}
-  onSeek={handleSeek}
-  onVolumeChange={values => setVolume(values[0])}
-  volume={volume}
-  showVolumeControl={true}
-  sliderClassName="ui-slider" // Use the light background style
-/>
-          
-          {/* EQ visualization */}
-          <div className="relative">
-            <EQVisualization 
-              isEQEnabled={isEQEnabled}
-              isSplitEarMode={isSplitEarMode}
-              unifiedBands={unifiedBands}
-              leftEarBands={leftEarBands}
-              rightEarBands={rightEarBands}
-              leftEarEnabled={leftEQEnabled}
-              rightEarEnabled={rightEQEnabled}
-              frequencyResponseData={frequencyResponseData}
-              onBandChange={handleBandChange}
-              onFrequencyChange={handleFrequencyChange}
-              height={140}
-              minGain={-24}
-              maxGain={24}
-              allowXDragging={true}
-              allowYDragging={true}
-            />
-            
-            {/* Save preset button */}
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button 
-                    size="icon" 
-                    variant="ghost" 
-                    className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/20 text-white hover:bg-black/30"
-                    onClick={handleSaveCurrentEQ}
-                  >
-                    <Save size={14} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Save current EQ as preset</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-          
-          <div className="relative right-1 text-xs text-gray-500 bg-white/80 px-2 z-10">
-            Double-click point to adjust Q
-          </div>
-          
-          {/* EQ controls */}
-          <EQControls 
-  isEQEnabled={isEQEnabled}
-  isSplitEarMode={isSplitEarMode}
-  splitEarConfig={splitEarConfig}
-  leftEarEnabled={leftEQEnabled}
-  rightEarEnabled={rightEQEnabled}
-  onEQToggle={handleEQToggle}
-  onSplitEarToggle={handleSplitEarToggle}
-  onLeftEarToggle={handleLeftEQToggle}
-  onRightEarToggle={handleRightEQToggle}
-  onBalanceChange={handleBalanceChange}
-  onResetEQ={handleResetEQ}
-  activeTab={activeTab}
-  maxQValue={maxQValue}
-  onMaxQValueChange={setMaxQValue}
-  onTabChange={setActiveTab}
-  showCalibration={true}
-  onStartCalibration={() => setIsCalibrationOpen(true)}
-  onSavePreset={handleSaveCurrentEQ}
-  maxGainRange={maxGainRange}  
-  onMaxGainRangeChange={setMaxGainRange} 
-  />
-          
-          {/* Presets */}
-          {activeTab === 'eq' && (
-            <div className="mt-4 pt-2 border-t border-gray-100">
-              {/* Cloud status indicator */}
-              <div className="flex justify-between items-center mb-3">
-                <h3 className="text-sm font-medium">Presets</h3>
-                <CloudStatus />
-              </div>
-              
-              {/* Cloud promotion for non-logged in users */}
-              {!user && Object.keys(userPresets).length > 0 && (
-                <CloudPromotion trigger="presets" />
-              )}
-              
-              {isLoadingPresets ? (
-                <div className="py-2">
-                  <p className="text-sm text-center text-muted-foreground">
-                    Loading presets...
-                  </p>
-                </div>
-              ) : isSplitEarMode ? (
-                <SplitEarControls 
-                  builtInPresets={presets}
-                  userPresets={userPresets}
-                  splitEarConfig={splitEarConfig}
-                  onLeftEarPresetSelect={handleLeftEarPresetSelect}
-                  onRightEarPresetSelect={handleRightEarPresetSelect}
-                  onDeletePreset={handleDeletePreset}
-                  onSaveLeftEarPreset={handleSaveLeftEarEQ}
-                  onSaveRightEarPreset={handleSaveRightEarEQ}
-                  showUserPresets={true}
-                  showDeleteButton={true}
-                  isEQEnabled={isEQEnabled}
-                  leftEarEnabled={leftEQEnabled}
-                  rightEarEnabled={rightEQEnabled}
-                />
-              ) : (
-                <div>
-                  <Tabs defaultValue="standard" className="w-full">
-                    <TabsList className="grid grid-cols-3 mb-3">
-                      <TabsTrigger value="standard" className="text-xs">Standard</TabsTrigger>
-                      <TabsTrigger value="tinnitus" className="text-xs flex items-center gap-1">
-                        <Headphones className="h-3 w-3" />
-                        Tinnitus
-                      </TabsTrigger>
-                      <TabsTrigger value="custom" className="text-xs">Custom</TabsTrigger>
-                    </TabsList>
-                    
-                    <TabsContent value="standard">
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                        {Object.values(presets).map((preset) => {
-                          const isActive = unifiedPresetId === preset.id;
-                          const style = preset.color;
-                          
-                          return (
-                            <TooltipProvider key={preset.id}>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                <Button
-  className="text-sm font-medium rounded-md shadow-sm transition-colors w-full h-auto py-2 justify-start"
-  style={{
-    backgroundColor: isActive ? style.active.bg : style.inactive.bg,
-    color: isActive ? style.active.text : style.inactive.text,
-    border: "none",
-  }}
-  onClick={() => handleUnifiedPresetSelect(preset)}
->
-  <div className="flex flex-col items-start w-full overflow-hidden">
-    <span className="font-medium truncate w-full">{preset.name}</span>
-    <span className="text-xs opacity-70 truncate w-full">
-      {preset.description}
-    </span>
-  </div>
-</Button>
-                                </TooltipTrigger>
-                                <TooltipContent side="right">
-                                  <p>{preset.description}</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          );
-                        })}
-                      </div>
-                    </TabsContent>
-                    
-                    <TabsContent value="tinnitus">
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
-                        {Object.values(userPresets)
-                          .filter(preset => preset.isCalibrated)
-                          .map((preset) => {
-                            const isActive = unifiedPresetId === preset.id;
-                            const style = preset.color;
-                            
-                            return (
-                              <TooltipProvider key={preset.id}>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                  <Button
-  className="text-sm font-medium rounded-md shadow-sm transition-colors w-full h-auto py-2 justify-start"
-  style={{
-    backgroundColor: isActive ? style.active.bg : style.inactive.bg,
-    color: isActive ? style.active.text : style.inactive.text,
-    border: "none",
-  }}
-  onClick={() => handleUnifiedPresetSelect(preset)}
->
-  <div className="flex flex-col items-start w-full overflow-hidden">
-    <span className="font-medium truncate w-full">{preset.name}</span>
-    {preset.tinnitusCenterFreq ? (
-      <span className="text-xs opacity-70 truncate w-full">
-        {preset.tinnitusCenterFreq >= 1000 ? 
-          `${(preset.tinnitusCenterFreq/1000).toFixed(1)}kHz` : 
-          `${preset.tinnitusCenterFreq.toFixed(0)}Hz`}
-      </span>
-    ) : (
-      <span className="text-xs opacity-70 truncate w-full">
-        {new Date(preset.dateCreated).toLocaleDateString()}
-      </span>
-    )}
-  </div>
-</Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent side="right" className="max-w-xs">
-  <div className="space-y-1.5">
-    <p className="font-medium">{preset.name}</p>
-    <p className="text-xs whitespace-normal">{preset.description}</p>
-    {preset.tinnitusCenterFreq && (
-      <p className="text-xs">
-        Calibrated for tinnitus at {preset.tinnitusCenterFreq.toFixed(0)}Hz
-      </p>
-    )}
-  </div>
-</TooltipContent>
-                                </Tooltip>
-                                
-                                {/* Delete button */}
-                                <div className="absolute -right-2 -top-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6 rounded-full bg-white shadow border border-gray-200"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleDeletePreset(preset.id);
-                                    }}
-                                  >
-                                    <Trash2 className="h-3 w-3 text-red-500" />
-                                  </Button>
-                                </div>
-                              </TooltipProvider>
-                            );
-                          })}
-                        
-                        {Object.values(userPresets).filter(preset => preset.isCalibrated).length === 0 && (
-                          <div className="col-span-2 sm:col-span-3 p-4 text-center text-muted-foreground bg-purple-50 rounded-md">
-                            <Headphones className="h-5 w-5 mx-auto mb-2 text-purple-500" />
-                            <p className="text-sm text-purple-700">No tinnitus presets yet</p>
-                            <p className="text-xs mt-1 text-purple-600">
-                              Use the calibration wizard to create a personalized tinnitus preset
-                            </p>
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              className="mt-3 text-purple-700 border-purple-300 hover:bg-purple-100"
-                              onClick={() => setIsCalibrationOpen(true)}
-                            >
-                              <Headphones className="h-3 w-3 mr-1" />
-                              Start Calibration
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    </TabsContent>
-                    
-                    <TabsContent value="custom">
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                        {Object.values(userPresets)
-                          .filter(preset => !preset.isCalibrated)
-                          .map((preset) => {
-                            const isActive = unifiedPresetId === preset.id;
-                            const style = preset.color;
-                            
-                            return (
-                              <div key={preset.id} className="relative group">
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Button
-                                        className="text-sm font-medium rounded-md shadow-sm transition-colors w-full h-auto py-2 justify-start"
-                                        style={{
-                                          backgroundColor: isActive ? style.active.bg : style.inactive.bg,
-                                          color: isActive ? style.active.text : style.inactive.text,
-                                          border: "none",
-                                        }}
-                                        onClick={() => handleUnifiedPresetSelect(preset)}
-                                      >
-                                        <div className="flex flex-col items-start">
-                                        <span className="font-medium line-clamp-1 w-full">{preset.name}</span>
-                                        <span className="text-xs opacity-70 line-clamp-1 w-full">
-                                            {new Date(preset.dateCreated).toLocaleDateString()}
-                                          </span>
-                                        </div>
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="right">
-                                      <div className="space-y-1 max-w-xs">
-                                        <p className="font-medium">{preset.name}</p>
-                                        <p className="text-xs">{preset.description}</p>
-                                      </div>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                                
-                                {/* Delete button */}
-                                <div className="absolute -right-2 -top-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6 rounded-full bg-white shadow border border-gray-200"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleDeletePreset(preset.id);
-                                    }}
-                                  >
-                                    <Trash2 className="h-3 w-3 text-red-500" />
-                                  </Button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        
-                        {Object.values(userPresets).filter(preset => !preset.isCalibrated).length === 0 && (
-                          <div className="col-span-2 sm:col-span-3 p-4 text-center text-muted-foreground bg-gray-50 rounded-md">
-                            <Save className="h-5 w-5 mx-auto mb-2 text-gray-400" />
-                            <p className="text-sm">No custom presets yet</p>
-                            <p className="text-xs mt-1">
-                              Adjust the EQ and save your settings as a custom preset
-                            </p>
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              className="mt-3"
-                              onClick={handleSaveCurrentEQ}
-                            >
-                              <Save className="h-3 w-3 mr-1" />
-                              Save Current EQ
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    </TabsContent>
-                  </Tabs>
-                </div>
-              )}
-            </div>
-          )}
-        </CardContent>
+{/* Mobile view */}
+<div className="md:hidden">
+  {/* Simplified controls for mobile */}
+  <div className="flex flex-col space-y-4 p-4">
+    {/* Simplified EQ controls for mobile */}
+    <div className="flex justify-between items-center">
+      <div className="flex items-center space-x-2">
+        <Switch 
+          checked={isEQEnabled} 
+          onCheckedChange={handleEQToggle} 
+          id="eq-toggle-mobile"
+        />
+        <label htmlFor="eq-toggle-mobile" className="text-sm font-medium">
+          EQ {isEQEnabled ? "On" : "Off"}
+        </label>
       </div>
+      
+      <Button 
+        variant="outline" 
+        size="sm"
+        onClick={handleSplitEarToggle}
+        className="text-xs"
+      >
+        {isSplitEarMode ? "Unified" : "Split Ear"} 
+      </Button>
+    </div>
+    
+    {/* Simplified player controls for mobile */}
+    <PlayerControls 
+      playbackState={playbackState}
+      onPlayPause={handlePlayPause}
+      onSeek={handleSeek}
+      onVolumeChange={values => setVolume(values[0])}
+      volume={volume}
+      showVolumeControl={true}
+      sliderClassName="player-slider-mobile" // Add this class
+    />
+  </div>
+</div>
   
       {/* Desktop view - side-by-side layout */}
       <div className="hidden md:flex min-650px]">
@@ -1448,6 +1117,8 @@ const handleBandChange = (
         <Headphones className="h-4 w-4 mr-2" />
         Calibrate for Tinnitus
       </Button>
+
+      <TinnitusGuide />
           </div>
           
           {/* App info */}
@@ -1460,8 +1131,8 @@ const handleBandChange = (
         <div className="w-3/5 lg:w-2/3">
         <div className="p-6 space-y-6">
             {/* EQ visualization - larger for desktop */}
-            <div className="relative">
-              <EQVisualization 
+            <div className='relative'>
+                            <EQVisualization 
                 isEQEnabled={isEQEnabled}
                 isSplitEarMode={isSplitEarMode}
                 unifiedBands={unifiedBands}
@@ -1853,6 +1524,8 @@ const handleBandChange = (
           </div>
         </DialogContent>
       </Dialog>
+
+      
     </Card>
   );
 };

@@ -12,6 +12,33 @@ body {
   }
 }
 
+/* In app/globals.css */
+.player-slider-mobile .SliderTrack {
+  height: 8px; /* Thicker for easier touch */
+}
+
+.player-slider-mobile .SliderThumb {
+  height: 20px;
+  width: 20px; /* Larger thumb for mobile */
+}
+
+/* Add touch-friendly styles for mobile EQ points */
+@media (max-width: 768px) {
+  .eq-point {
+    /* Increase the hit area */
+    transform: scale(1.5);
+  }
+}
+
+@keyframes subtle-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.2); }
+  50% { box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.1); }
+}
+
+.animate-subtle-pulse {
+  animation: subtle-pulse 2s infinite;
+}
+
 .shadcn-tooltip-content {
   z-index: 50 !important;
   max-width: 300px;

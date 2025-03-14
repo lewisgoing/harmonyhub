@@ -1002,7 +1002,7 @@ const drawBandPoint = (
     };
     
     return (
-      <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-md p-3">
+      <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 opacity-90 shadow-md p-3">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center">
             <span className={`px-2 py-0.5 rounded text-xs ${channelColor}`}>

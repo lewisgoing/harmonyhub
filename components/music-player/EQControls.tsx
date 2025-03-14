@@ -101,39 +101,57 @@ const EQControls: React.FC<EQControlsProps> = ({
     
     <TabsContent value="eq" className="space-y-4">
       {/* EQ toggle and mode selector */}
-      <div className="flex flex-col sm:flex-row justify-between gap-4">
-        <div className="flex items-center space-x-2">
-          <Switch 
-            checked={isEQEnabled} 
-            onCheckedChange={onEQToggle} 
-            id="eq-toggle"
-          />
-          <label htmlFor="eq-toggle" className="text-sm font-medium">
-            EQ {isEQEnabled ? "On" : "Off"}
-          </label>
-        </div>
-        
-        <div className="flex items-center space-x-2">
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={onSplitEarToggle}
-            className="text-xs h-8"
-          >
-            {isSplitEarMode ? "Unified Mode" : "Split Ear Mode"}
-          </Button>
-        </div>
-      </div>
-
-      <div className="mt-2 text-xs text-gray-500">
-  <p className={`${isSplitEarMode ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>
-    {isSplitEarMode ? '✓ Split Ear Mode: Different EQ for each ear' : 'Split Ear Mode'}
-  </p>
-  <p className={`${!isSplitEarMode ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>
-    {!isSplitEarMode ? '✓ Unified Mode: Same EQ for both ears' : 'Unified Mode'}
-  </p>
-</div>
+      <div className="relative flex justify-center items-center py-2">
+    {/* Left toggle, positioned absolutely */}
+    <div className="absolute left-0 top-1/2 -translate-y-1/2 flex items-center space-x-2">
+      <Switch 
+        checked={isEQEnabled} 
+        onCheckedChange={onEQToggle} 
+        id="eq-toggle"
+      />
+      <label htmlFor="eq-toggle" className="text-sm font-medium">
+        EQ {isEQEnabled ? "On" : "Off"}
+      </label>
+    </div>
+    
+    {/* Centered buttons */}
+    <div className="flex items-center gap-4 px-4">
+      <button
+        type="button"
+        onClick={() => !isSplitEarMode ? null : onSplitEarToggle()}
+        className={`transition-all duration-300 rounded-full px-3 py-1 text-xs flex items-center gap-1 cursor-pointer hover:shadow ${
+          !isSplitEarMode 
+            ? 'bg-orange-100 text-orange-700 border border-orange-200 font-medium ring-1 ring-orange-300' 
+            : 'bg-gray-100 text-gray-500 hover:bg-gray-200 border border-gray-200'
+        }`}
+        aria-pressed={!isSplitEarMode}
+        aria-label="Switch to unified mode"
+      >
+        <span className={`h-2 w-2 rounded-full ${!isSplitEarMode ? 'bg-orange-500' : 'bg-gray-300'}`}></span>
+        Unified Mode
+      </button>
       
+      <button
+        type="button"
+        onClick={() => isSplitEarMode ? null : onSplitEarToggle()}
+        className={`transition-all duration-300 rounded-full px-3 py-1 text-xs flex items-center gap-1 cursor-pointer hover:shadow ${
+          isSplitEarMode 
+            ? 'bg-gradient-to-r from-blue-100 to-red-100 text-blue-700 border border-blue-200 font-medium ring-1 ring-blue-300' 
+            : 'bg-gray-100 text-gray-500 hover:bg-gray-200 border border-gray-200'
+        }`}
+        aria-pressed={isSplitEarMode}
+        aria-label="Switch to split ear mode"
+      >
+        <div className="flex gap-1">
+          <span className={`h-2 w-2 rounded-full ${isSplitEarMode ? 'bg-blue-500' : 'bg-gray-300'}`}></span>
+          <span className={`h-2 w-2 rounded-full ${isSplitEarMode ? 'bg-red-500' : 'bg-gray-300'}`}></span>
+        </div>
+        Split Ear Mode
+      </button>
+    </div>
+
+
+</div>
 
 
           
@@ -199,14 +217,16 @@ const EQControls: React.FC<EQControlsProps> = ({
           {/* Calibration button */}
           {showCalibration && onStartCalibration && (
             <div className="pt-3 mt-1 border-t border-gray-100">
-              <Button 
-                variant="secondary" 
-                className="w-full bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200"
-                onClick={onStartCalibration}
-              >
-                <Headphones className="h-4 w-4 mr-2" />
-                Calibrate for Tinnitus
-              </Button>
+<Button 
+  variant="secondary" 
+  className="flex-1 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 animate-subtle-pulse"
+  onClick={onStartCalibration}
+>
+  <Headphones className="h-4 w-4 mr-2" />
+  Calibrate for Tinnitus
+</Button>
+
+              
             </div>
           )}
         </TabsContent>
@@ -225,103 +245,6 @@ const EQControls: React.FC<EQControlsProps> = ({
     </p>
   </div>
 </TabsContent>
-      {/* wip code */}
-        {/* <TabsContent value="settings" className="space-y-4"> */}
-  {/* Mode settings */}
-  {/* <div className="space-y-3">
-    <h3 className="text-sm font-medium">Audio Mode</h3>
-    <div className="grid grid-cols-2 gap-2"> */}
-      {/* existing mode buttons */}
-    {/* </div>
-  </div> */}
-  
-  {/* Add gain range settings */}
-  {/* <div className="space-y-3">
-    <h3 className="text-sm font-medium">EQ Settings</h3>
-    
-    <div className="space-y-2">
-      <Label>Gain Range (±dB)</Label>
-      <div className="grid grid-cols-3 gap-2">
-        <Button 
-          variant={maxGainRange === 12 ? "default" : "outline"}
-          size="sm" 
-          className="text-xs" 
-          onClick={() => setMaxGainRange(12)}
-        >
-          ±12 dB
-        </Button>
-        <Button 
-          variant={maxGainRange === 24 ? "default" : "outline"}
-          size="sm" 
-          className="text-xs" 
-          onClick={() => setMaxGainRange(24)}
-        >
-          ±24 dB
-        </Button>
-        <Button 
-          variant={maxGainRange === 36 ? "default" : "outline"}
-          size="sm" 
-          className="text-xs" 
-          onClick={() => setMaxGainRange(36)}
-        >
-          ±36 dB
-        </Button>
-      </div>
-      <p className="text-xs text-muted-foreground mt-1">
-        Higher ranges allow more dramatic EQ adjustments
-      </p>
-    </div> */}
-    
-    {/* <div className="space-y-2">
-  <Label>Max Q Value</Label>
-  <div className="grid grid-cols-3 gap-2">
-    <Button 
-      variant={maxQValue === 10 ? "default" : "outline"}
-      size="sm" 
-      className="text-xs" 
-      onClick={() => onMaxQValueChange(10)}
-    >
-      10
-    </Button>
-    <Button 
-      variant={maxQValue === 20 ? "default" : "outline"}
-      size="sm" 
-      className="text-xs" 
-      onClick={() => onMaxQValueChange(20)}
-    >
-      20
-    </Button>
-    <Button 
-      variant={maxQValue === 30 ? "default" : "outline"}
-      size="sm" 
-      className="text-xs" 
-      onClick={() => onMaxQValueChange(30)}
-    >
-      30
-    </Button>
-  </div>
-  <p className="text-xs text-muted-foreground mt-1">
-    Higher Q values create narrower, more precise filters
-  </p>
-</div>          Info about EQ */}
-          {/* <div className="p-4 bg-gray-50 rounded-md">
-            <h3 className="text-sm font-medium mb-2">About This App</h3>
-            <div className="text-xs text-gray-500 space-y-2">
-              <p>
-                This app is designed to help people with hearing loss or tinnitus. 
-                You can create custom EQ presets to enhance your music listening experience.
-              </p>
-              <p>
-                <strong>Split Ear Mode</strong> lets you apply different EQ settings to each ear,
-                which can be helpful for those with asymmetrical hearing loss or tinnitus.
-              </p>
-              <p>
-                <strong>Calibration Wizard</strong> helps you create a personalized EQ preset based 
-                on your specific tinnitus frequency.
-              </p>
-            </div>
-          </div> */}
-        {/* </TabsContent> */}
       </Tabs>
     </div>
   );

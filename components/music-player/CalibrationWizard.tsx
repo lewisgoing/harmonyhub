@@ -18,7 +18,10 @@ import {
   AlertTriangle,
   Headphones,
   Check,
-  Music
+  Music,
+  Info,
+  BookOpen,
+  ExternalLink
 } from 'lucide-react';
 
 import { CALIBRATION_STEPS, TINNITUS_TEST_FREQUENCIES, DEFAULT_FREQUENCY_BANDS } from './constants';
@@ -241,57 +244,74 @@ const CalibrationWizard: React.FC<CalibrationWizardProps> = ({ onComplete, onCan
 // Update the createCustomPreset function to enforce correct settings
 
 const createCustomPreset = () => {
-  const { frequency } = calibrationResultsRef.current;
+  const { frequency, notchDepth, notchWidth } = calibrationResultsRef.current;
 
-  // Always use these enforced values for consistency
-  const enforcedNotchDepth = -12; 
-  const enforcedNotchWidth = 0.3;
-  
+  // Use user-selected values instead of enforced ones
   // Format frequency for display
   const formattedFreq = frequency >= 1000 ? 
     `${(frequency/1000).toFixed(1)}kHz` : 
     `${frequency.toFixed(0)}Hz`;
   
-  console.log('Creating calibration preset:', {
+  console.log('Creating calibration preset with user values:', {
     frequency,
     notchDepth,
-    enforcedNotchDepth,
-    enforcedNotchWidth,
+    notchWidth,
     isCalibrated: true
   });
+
+
   
-  // Create bands with our enforced settings
+  // Create bands with user-selected settings
   const customBands: FrequencyBand[] = DEFAULT_FREQUENCY_BANDS.map(band => {
-    // Find closest band to tinnitus frequency
-    const distance = Math.abs(band.frequency - frequency);
-    const isClosest = distance < (band.frequency * 0.2); // Within 20% range
+    // Enhanced algorithm for band selection, especially for 5-7kHz region
+    // For frequencies in the critical 5-7kHz tinnitus range, be more precise
+    const isCriticalRange = frequency >= 5000 && frequency <= 7000;
     
-    if (isClosest) {
+    // Use a tighter percentage for the critical range
+    const matchPercentage = isCriticalRange ? 0.15 : 0.2;
+    const distance = Math.abs(band.frequency - frequency);
+    
+    // Check if this band should be modified
+    const isExactMatch = distance < (band.frequency * matchPercentage);
+    const isNeighbor = notchWidth > 0.5 && distance < (band.frequency * 0.4);
+    
+    if (isExactMatch) {
+      // This is the primary band to modify
       return {
         ...band,
         frequency, // Set exact tinnitus frequency
-        gain: enforcedNotchDepth, // USE ENFORCED VALUE
-        Q: enforcedNotchWidth * 10 // USE ENFORCED VALUE
+        gain: notchDepth, // Use user-selected depth
+        Q: notchWidth * 10 // Use user-selected width
+      };
+    } else if (isNeighbor) {
+      // For wide notches, also modify neighboring bands
+      // Apply a milder version of the notch to neighboring bands
+      return {
+        ...band,
+        gain: notchDepth * 0.7, // 70% of primary notch depth
+        Q: notchWidth * 7 // Wider Q for smoother transition
       };
     }
     
-    // Mild high-freq attenuation and low-freq boost
-    if (band.frequency > frequency * 1.5) {
-      return { ...band, gain: -3 };
-    } else if (band.frequency < frequency * 0.3) {
-      return { ...band, gain: 2 };
+    // Custom EQ shaping based on relationship to tinnitus frequency
+    if (band.frequency > frequency * 1.3) {
+      return { ...band, gain: -2 }; // Slight attenuation above tinnitus
+    } else if (band.frequency < frequency * 0.4) {
+      return { ...band, gain: 3 }; // Mild boost to low frequencies for masking
     }
     
     return band;
   });
   
-  console.log('Created bands with notch filter:', customBands);
+
+  
+  console.log('Created bands with user-specified notch filter:', customBands);
   
   // Create the custom preset
   const customPreset: UserPreset = {
     id: `tinnitus-${Date.now()}`,
     name: presetName || `Tinnitus Relief ${formattedFreq}`,
-    description: `Personalized tinnitus relief preset with ${Math.abs(enforcedNotchDepth)}dB notch filter at ${formattedFreq}. Created through calibration.`,
+    description: `Personalized tinnitus relief preset with ${Math.abs(notchDepth)}dB notch filter at ${formattedFreq}. Created through calibration.`,
     color: {
       active: { bg: "#8B5CF6", text: "white" },
       inactive: { bg: "#EDE9FE", text: "#6D28D9" }
@@ -301,6 +321,20 @@ const createCustomPreset = () => {
     tinnitusCenterFreq: frequency,
     isCalibrated: true
   };
+
+  console.group('Tinnitus Preset Creation');
+  console.log('User inputs:', calibrationResultsRef.current);
+  console.log('Target frequency:', frequency);
+  console.log('Notch depth:', notchDepth);
+  console.log('Notch width:', notchWidth);
+  
+  const affectedBands = customBands.filter(band => 
+    band.gain !== 0 || band.frequency !== DEFAULT_FREQUENCY_BANDS.find(b => b.id === band.id)?.frequency
+  );
+  
+  console.log('Affected bands:', affectedBands);
+  console.log('Final preset:', customPreset);
+  console.groupEnd();
   
   // Send preset to parent
   onComplete(customPreset);
@@ -310,6 +344,20 @@ const createCustomPreset = () => {
    * Render the current step content
    */
   const renderStepContent = () => {
+    <div className="flex justify-between mb-4">
+  {CALIBRATION_STEPS.map((stepInfo, index) => (
+    <div 
+      key={index}
+      className={`flex-1 h-1 rounded-full mx-0.5 ${
+        index < step 
+          ? 'bg-blue-500' 
+          : index === step 
+            ? 'bg-blue-300' 
+            : 'bg-gray-200'
+      }`}
+    />
+  ))}
+</div>
     switch (step) {
       case 0: // Welcome
         return (
@@ -353,6 +401,36 @@ const createCustomPreset = () => {
                 </motion.li>
               </ul>
             </motion.div>
+            <motion.div 
+  className="bg-blue-50 border border-blue-200 rounded-md p-3 mt-3"
+  initial={{ opacity: 0, y: 20 }}
+  animate={{ opacity: 1, y: 0 }}
+  transition={{ delay: 0.5 }}
+>
+  <div className="flex items-start gap-2">
+    <BookOpen className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+    <div>
+      <p className="text-xs text-blue-700 font-medium">Based on Clinical Research</p>
+      <p className="text-xs text-blue-600 mt-0.5">
+        Our approach is based on peer-reviewed research by Okamoto (2010) on notched sound therapy for tinnitus management.
+      </p>
+      <ul className="text-xs mt-2 space-y-2 list-none pl-0">
+                      <li className="flex items-start gap-1">
+                        <ExternalLink className="h-3 w-3 text-purple-500 flex-shrink-0 mt-0.5" />
+                        <a 
+                          href="https://www.pnas.org/content/107/3/1207" 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-purple-600 hover:underline"
+                        >
+                          Okamoto et al. (2010) - "Listening to tailor-made notched music reduces tinnitus loudness"
+                        </a>
+                      </li>
+
+                    </ul>
+    </div>
+  </div>
+</motion.div>
           </CardContent>
         );
         
@@ -367,6 +445,23 @@ const createCustomPreset = () => {
             >
               Click each button to play test tones. Select the one that most closely matches your tinnitus sound.
             </motion.p>
+
+            <motion.div 
+  className="p-3 bg-blue-50 rounded-md mt-4"
+  initial={{ opacity: 0, y: 20 }}
+  animate={{ opacity: 1, y: 0 }}
+  transition={{ delay: 0.4 }}
+>
+  <h4 className="text-sm font-medium text-blue-700 flex items-center">
+    <Info className="h-4 w-4 mr-1" />
+    Frequency Selection Tips
+  </h4>
+  <ul className="text-xs text-blue-600 mt-1 space-y-1">
+    <li>• Common tinnitus frequencies are between 3-8kHz</li>
+    <li>• Try different frequencies until you find the closest match</li>
+    <li>• Select the tone that most closely matches your tinnitus pitch</li>
+  </ul>
+</motion.div>
             
             <motion.div 
               className="grid grid-cols-2 gap-2"
@@ -826,8 +921,7 @@ const createCustomPreset = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4 }}
             >
-              You can now enjoy music with reduced tinnitus interference. Your preset will
-              be available in the EQ preset list for future use.
+              You can now enjoy music with reduced tinnitus interference.     Your preset will be saved and can be accessed in the "Tinnitus" tab of presets.
             </motion.p>
             
             <motion.div

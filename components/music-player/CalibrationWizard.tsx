@@ -244,6 +244,8 @@ const CalibrationWizard: React.FC<CalibrationWizardProps> = ({ onComplete, onCan
 // In components/music-player/CalibrationWizard.tsx
 // Update the createCustomPreset function to enforce correct settings
 
+// Updated createCustomPreset function for CalibrationWizard.tsx
+
 const createCustomPreset = () => {
   const { frequency, notchDepth, notchWidth } = calibrationResultsRef.current;
 
@@ -262,13 +264,18 @@ const createCustomPreset = () => {
   // Create bands based on selected mode
   const customBands: FrequencyBand[] = DEFAULT_FREQUENCY_BANDS.map(band => {
     if (presetMode === 'simple') {
-      // Simple notch - only modify the closest band
-      const distance = Math.abs(band.frequency - frequency);
-      const distancePercentage = distance / band.frequency;
+      // Simple notch - find the closest band to the tinnitus frequency
+      // instead of requiring a specific percentage match
       
-      // Find the band closest to the tinnitus frequency
-      // or a band that's within 20% of the frequency
-      if (distancePercentage < 0.2) {
+      // Calculate distance to current band
+      const distance = Math.abs(band.frequency - frequency);
+      
+      // Find the nearest band to the tinnitus frequency
+      const nearestBandInfo = findNearestBand(DEFAULT_FREQUENCY_BANDS, frequency);
+      
+      // If this is the closest band to the tinnitus frequency
+      if (band.id === nearestBandInfo.bandId) {
+        console.log(`Applying notch to nearest band: ${band.frequency}Hz for tinnitus at ${frequency}Hz`);
         return {
           ...band,
           gain: notchDepth, // Apply notch depth
@@ -290,11 +297,13 @@ const createCustomPreset = () => {
       const isExactMatch = distance < (band.frequency * matchPercentage);
       const isNeighbor = notchWidth > 0.5 && distance < (band.frequency * 0.4);
       
-      if (isExactMatch) {
+      // Find the nearest band to apply the main notch
+      const nearestBandInfo = findNearestBand(DEFAULT_FREQUENCY_BANDS, frequency);
+      
+      if (band.id === nearestBandInfo.bandId) {
         // This is the primary band to modify
         return {
           ...band,
-          frequency, // Set exact tinnitus frequency
           gain: notchDepth, // Use user-selected depth
           Q: notchWidth * 10 // Use user-selected width
         };
@@ -317,6 +326,26 @@ const createCustomPreset = () => {
       return { ...band };
     }
   });
+  
+  // Helper function to find the nearest band to a given frequency
+  function findNearestBand(bands: FrequencyBand[], targetFreq: number) {
+    let closestBand = bands[0];
+    let smallestDistance = Math.abs(bands[0].frequency - targetFreq);
+    
+    for (const band of bands) {
+      const distance = Math.abs(band.frequency - targetFreq);
+      if (distance < smallestDistance) {
+        smallestDistance = distance;
+        closestBand = band;
+      }
+    }
+    
+    return {
+      bandId: closestBand.id,
+      frequency: closestBand.frequency,
+      distance: smallestDistance
+    };
+  }
   
   // Descriptive text based on selected mode
   const description = presetMode === 'simple'

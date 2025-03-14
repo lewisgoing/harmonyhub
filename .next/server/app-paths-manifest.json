@@ -1,5 +1,5 @@
 {
+  "/page": "app/page.js",
   "/manifest.json/route": "app/manifest.json/route.js",
-  "/icon.png/route": "app/icon.png/route.js",
-  "/page": "app/page.js"
+  "/icon.png/route": "app/icon.png/route.js"
 }

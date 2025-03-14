@@ -1095,7 +1095,7 @@ const drawBandPoint = (
         <div className="text-xs text-gray-500 mt-2">
           <p><strong>Q Value</strong> controls how wide or narrow the EQ adjustment is:</p>
           <p>• Low Q values (0.1-3): Wide, gentle adjustments</p>
-          <p>• High Q values (3-30): Narrow, precise adjustments</p>
+          <p>• High Q values (3-10): Narrow, precise adjustments</p>
         </div>
       </div>
     );

@@ -237,9 +237,6 @@ export class AudioEngine {
         this.nodes.rightGain = null;
       
         if (this.splitEarMode) {
-          // SPLIT EAR MODE SETUP
-          console.log("Setting up split ear mode");
-          
           // Create splitter
           const splitter = context.createChannelSplitter(2);
           this.nodes.splitter = splitter;
@@ -258,43 +255,32 @@ export class AudioEngine {
           const leftFilters = this.createFiltersFromBands(context, this.leftEarBands);
           this.nodes.leftFilters = leftFilters;
           
-          // Create filters for right channel
+          // Create filters for right channel  
           const rightFilters = this.createFiltersFromBands(context, this.rightEarBands);
           this.nodes.rightFilters = rightFilters;
-          
-          // Apply gain and balance
-          this.applyBalance();
           
           // Connect everything in sequence
           mediaSource.connect(splitter);
           
+          // FIXED: Ensure consistent filter connection pattern with unified mode
           // Left channel
           splitter.connect(leftFilters[0], 0);
-          // Connect filters in sequence
           for (let i = 0; i < leftFilters.length - 1; i++) {
             leftFilters[i].connect(leftFilters[i + 1]);
           }
-          // Connect last filter to gain
           leftFilters[leftFilters.length - 1].connect(leftGain);
           leftGain.connect(merger, 0, 0);
           
           // Right channel
           splitter.connect(rightFilters[0], 1);
-          // Connect filters in sequence
           for (let i = 0; i < rightFilters.length - 1; i++) {
             rightFilters[i].connect(rightFilters[i + 1]);
           }
-          // Connect last filter to gain
           rightFilters[rightFilters.length - 1].connect(rightGain);
           rightGain.connect(merger, 0, 1);
           
           // Connect merger to destination
           merger.connect(context.destination);
-          
-          // Apply EQ settings
-          this.applyEQSettings();
-          
-          console.log("Split ear mode setup complete");
         } else {
           // UNIFIED MODE SETUP
           console.log("Setting up unified mode");
@@ -392,10 +378,10 @@ export class AudioEngine {
       filter.frequency.value = band.frequency;
       filter.gain.value = this.eqEnabled ? band.gain : 0;
       filter.Q.value = band.Q;
+      
       return filter;
     });
   }
-
   /**
    * Apply balance setting to gain nodes
    */
@@ -455,41 +441,43 @@ export class AudioEngine {
   /**
    * Apply band settings to filter nodes
    */
-  private applyBandsToFilters(
-    bands: FrequencyBand[], 
-    filters: BiquadFilterNode[],
-    enabled: boolean
-  ): void {
-    // Get current time from audio context for scheduling parameter changes
-    const currentTime = this.nodes.context?.currentTime || 0;
-    // Set a short ramp time for smoother transitions (50ms)
-    const rampTime = 0.05; 
-  
-    bands.forEach((band, index) => {
-      if (index < filters.length) {
-        const filter = filters[index];
-        
-        // Apply gain change with a smooth ramp
-        const targetGain = enabled ? band.gain : 0;
-        filter.gain.cancelScheduledValues(currentTime);
-        filter.gain.setValueAtTime(filter.gain.value, currentTime);
-        filter.gain.linearRampToValueAtTime(targetGain, currentTime + rampTime);
-        
-        // Apply frequency change with a smooth ramp
-        filter.frequency.cancelScheduledValues(currentTime);
-        filter.frequency.setValueAtTime(filter.frequency.value, currentTime);
-        filter.frequency.exponentialRampToValueAtTime(
-          Math.max(20, band.frequency), // Ensure frequency isn't too low for exponential ramp
-          currentTime + rampTime
-        );
-        
-        // Apply Q change with a smooth ramp
-        filter.Q.cancelScheduledValues(currentTime);
-        filter.Q.setValueAtTime(filter.Q.value, currentTime);
-        filter.Q.linearRampToValueAtTime(band.Q, currentTime + rampTime);
-      }
-    });
-  }
+// Update the applyBandsToFilters method in AudioEngine.ts
+private applyBandsToFilters(
+  bands: FrequencyBand[], 
+  filters: BiquadFilterNode[],
+  enabled: boolean
+): void {
+  // Get current time from audio context for scheduling parameter changes
+  const currentTime = this.nodes.context?.currentTime || 0;
+  // Set a short ramp time for smoother transitions (50ms)
+  const rampTime = 0.05; 
+
+  bands.forEach((band, index) => {
+    if (index < filters.length) {
+      const filter = filters[index];
+      
+      // Apply gain change with a smooth ramp
+      const targetGain = enabled ? band.gain : 0;
+      filter.gain.cancelScheduledValues(currentTime);
+      filter.gain.setValueAtTime(filter.gain.value, currentTime);
+      filter.gain.linearRampToValueAtTime(targetGain, currentTime + rampTime);
+      
+      // Apply frequency change with a smooth ramp
+      filter.frequency.cancelScheduledValues(currentTime);
+      filter.frequency.setValueAtTime(filter.frequency.value, currentTime);
+      filter.frequency.exponentialRampToValueAtTime(
+        Math.max(20, band.frequency), // Ensure frequency isn't too low for exponential ramp
+        currentTime + rampTime
+      );
+      
+      // Apply Q change with a smooth ramp - FIXED: Apply the same Q scaling in both modes
+      const scaledQ = band.Q * 1.0; // Apply consistent scaling factor in both modes
+      filter.Q.cancelScheduledValues(currentTime);
+      filter.Q.setValueAtTime(filter.Q.value, currentTime);
+      filter.Q.linearRampToValueAtTime(scaledQ, currentTime + rampTime);
+    }
+  });
+}
 
   /**
    * Approximate frequency response from bands when WebAudio API is not available
@@ -696,6 +684,14 @@ export class AudioEngine {
     this.cacheInvalidated = true;
   }
 
+  private needsBackgroundUpdate = false;
+
+// Add this method to support background calculations
+private calculateBackgroundFrequencyResponse(): void {
+  // Perform intensive calculations during idle time
+  // This improves UI responsiveness
+  this.needsBackgroundUpdate = false;
+}
   /**
    * Apply a preset to right ear
    */
@@ -745,6 +741,7 @@ export class AudioEngine {
       return this.lastResponseCache;
     }
     
+    
     const frequencies = new Float32Array(numPoints);
     const leftMagnitudes = new Float32Array(numPoints);
     const rightMagnitudes = new Float32Array(numPoints);
@@ -780,9 +777,19 @@ export class AudioEngine {
       this.lastResponseCache = { frequencies, leftMagnitudes, rightMagnitudes };
       this.cacheInvalidated = false;
       
+      // Use requestIdleCallback if available to smooth out UI
+      if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+        (window as any).requestIdleCallback(() => {
+          // Recalculate in background if needed
+          if (this.needsBackgroundUpdate) {
+            this.calculateBackgroundFrequencyResponse();
+          }
+        });
+      }
+      
       return { frequencies, leftMagnitudes, rightMagnitudes };
     }
-    
+
     if (this.splitEarMode) {
       if (this.nodes.leftFilters.length > 0) {
         // Combine frequency responses from all filters

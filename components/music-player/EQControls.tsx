@@ -124,6 +124,15 @@ const EQControls: React.FC<EQControlsProps> = ({
           </Button>
         </div>
       </div>
+
+      <div className="mt-2 text-xs text-gray-500">
+  <p className={`${isSplitEarMode ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>
+    {isSplitEarMode ? '✓ Split Ear Mode: Different EQ for each ear' : 'Split Ear Mode'}
+  </p>
+  <p className={`${!isSplitEarMode ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>
+    {!isSplitEarMode ? '✓ Unified Mode: Same EQ for both ears' : 'Unified Mode'}
+  </p>
+</div>
       
 
 

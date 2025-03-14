@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { 
   Music, 
@@ -90,6 +90,7 @@ const PlayerContainer: React.FC = () => {
   });
 
   
+
   const [maxQValue, setMaxQValue] = useState<10 | 20 | 30>(20); 
   const [activePresetTab, setActivePresetTab] = useState<string>("standard");
   // Frequency bands for EQ
@@ -100,6 +101,8 @@ const PlayerContainer: React.FC = () => {
   const [isCalibrationOpen, setIsCalibrationOpen] = useState(false);
   const [newPresetDescription, setNewPresetDescription] = useState('Custom user preset');
   
+  const [maxGainRange, setMaxGainRange] = useState<12 | 24 | 36 | 48>(48);
+
   // External audio state
   const [isUrlInputOpen, setIsUrlInputOpen] = useState(false);
   const [currentSong, setCurrentSong] = useState<Song>(DEMO_SONG);
@@ -131,6 +134,57 @@ const isMobile = useIsMobile(); // This comes from your existing hooks/use-mobil
       setFrequencyResponseData(responseData);
     }
   };
+
+  // Add this component to your PlayerContainer.tsx
+const TinnitusHelpButton = () => {
+  const [isOpen, setIsOpen] = useState(false);
+  
+  return (
+    <>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => setIsOpen(true)}
+        className="text-xs flex items-center gap-1 bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100"
+      >
+        <Headphones className="h-3 w-3" />
+        Tinnitus Help
+      </Button>
+      
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Tinnitus Relief Tips</DialogTitle>
+            <DialogDescription>
+              Quick guidance for using EQ to help with tinnitus
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="p-3 bg-purple-50 rounded-md space-y-2">
+              <h3 className="font-medium text-sm">What might help:</h3>
+              <ul className="text-sm space-y-1.5 list-disc pl-4">
+                <li>Try using a <strong>notch filter</strong> at your tinnitus frequency</li>
+                <li>Use the <strong>Calibration Wizard</strong> to find your exact frequency</li>
+                <li>Boost lower frequencies slightly for masking</li>
+                <li>Try <strong>Split Ear Mode</strong> if your tinnitus is stronger in one ear</li>
+              </ul>
+            </div>
+            
+            <div className="p-3 bg-blue-50 rounded-md">
+              <h3 className="font-medium text-sm">Recommended Presets:</h3>
+              <p className="text-sm mt-1">Start with <strong>Notch Filter</strong> or <strong>Gentle Relief</strong> presets, then customize to your hearing.</p>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button onClick={() => setIsOpen(false)}>Got it</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+};
 
   
   // Audio context state
@@ -1052,25 +1106,27 @@ const handleBandChange = (
           
           {/* EQ controls */}
           <EQControls 
-            isEQEnabled={isEQEnabled}
-            isSplitEarMode={isSplitEarMode}
-            splitEarConfig={splitEarConfig}
-            leftEarEnabled={leftEQEnabled}
-            rightEarEnabled={rightEQEnabled}
-            onEQToggle={handleEQToggle}
-            onSplitEarToggle={handleSplitEarToggle}
-            onLeftEarToggle={handleLeftEQToggle}
-            onRightEarToggle={handleRightEQToggle}
-            onBalanceChange={handleBalanceChange}
-            onResetEQ={handleResetEQ}
-            activeTab={activeTab}
-            maxQValue={maxQValue}
-            onMaxQValueChange={setMaxQValue}
-            onTabChange={setActiveTab}
-            showCalibration={true} // Show calibration button on mobile
-            onStartCalibration={() => setIsCalibrationOpen(true)}
-            onSavePreset={handleSaveCurrentEQ}
-          />
+  isEQEnabled={isEQEnabled}
+  isSplitEarMode={isSplitEarMode}
+  splitEarConfig={splitEarConfig}
+  leftEarEnabled={leftEQEnabled}
+  rightEarEnabled={rightEQEnabled}
+  onEQToggle={handleEQToggle}
+  onSplitEarToggle={handleSplitEarToggle}
+  onLeftEarToggle={handleLeftEQToggle}
+  onRightEarToggle={handleRightEQToggle}
+  onBalanceChange={handleBalanceChange}
+  onResetEQ={handleResetEQ}
+  activeTab={activeTab}
+  maxQValue={maxQValue}
+  onMaxQValueChange={setMaxQValue}
+  onTabChange={setActiveTab}
+  showCalibration={true}
+  onStartCalibration={() => setIsCalibrationOpen(true)}
+  onSavePreset={handleSaveCurrentEQ}
+  maxGainRange={maxGainRange}  
+  onMaxGainRangeChange={setMaxGainRange} 
+  />
           
           {/* Presets */}
           {activeTab === 'eq' && (

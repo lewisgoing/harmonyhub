@@ -4,7 +4,7 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { FrequencyBand } from './types';
 import { Slider } from '@/components/ui/slider';
 import { Button } from '@/components/ui/button';
-import { X } from 'lucide-react';
+import { MinusCircle, PlusCircle, X } from 'lucide-react';
 
 interface EQVisualizationProps {
   // EQ state
@@ -223,6 +223,8 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
   // Add a state to track the last click time for double-click detection
   const [lastClickTime, setLastClickTime] = useState(0);
 
+  
+
   // Redraw when props change
   useEffect(() => {
     drawEQCurve();
@@ -292,6 +294,8 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
       drawEQCurve();
     }
   };
+
+  
 
   /**
    * Draw the EQ curve on the canvas
@@ -772,24 +776,33 @@ const drawBandPoint = (
       selectedBandForQ && 
       selectedBandForQ.bandId === band.id && 
       selectedBandForQ.channel === channel) {
-    // Draw an outer ring to indicate Q adjustment mode
-    ctx.strokeStyle = 'yellow';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    
-    // The radius of the ring should vary with Q value to give visual feedback
-    const qIndicatorSize = Math.min(radius * (1 + band.Q / 10), radius * 3);
-    ctx.arc(x, y, qIndicatorSize, 0, Math.PI * 2);
-    ctx.stroke();
-    
-    // Draw a "Q" indicator with value
-    ctx.fillStyle = 'yellow';
-    ctx.font = 'bold 10px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(`Q: ${band.Q.toFixed(1)}`, x, y - qIndicatorSize - 5);
-  }
-    
+      // Draw an outer ring to indicate Q adjustment mode
+      // FIXED: Changed color from yellow to a more visible blue
+      ctx.strokeStyle = '#3b82f6'; // Changed from yellow to a bright blue
+      ctx.lineWidth = 2; // Increased from 1.5 for better visibility
+      ctx.beginPath();
+      
+      // The radius of the ring should vary with Q value to give visual feedback
+      const qIndicatorSize = Math.min(radius * (1 + band.Q / 10), radius * 3);
+      ctx.arc(x, y, qIndicatorSize, 0, Math.PI * 2);
+      ctx.stroke();
+      
+      // Draw a "Q" indicator with value - IMPROVED READABILITY
+      ctx.fillStyle = '#3b82f6'; // Matching blue
+      ctx.font = 'bold 11px sans-serif'; // Slightly larger font
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      
+      // Add a background for better readability
+      const qText = `Q: ${band.Q.toFixed(1)}`;
+      const textWidth = ctx.measureText(qText).width;
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'; // Semi-transparent white background
+      ctx.fillRect(x - textWidth/2 - 4, y - qIndicatorSize - 12, textWidth + 8, 18);
+      
+      // Draw text on top of background
+      ctx.fillStyle = '#3b82f6';
+      ctx.fillText(qText, x, y - qIndicatorSize - 5);
+    }
     // Reset opacity
     ctx.globalAlpha = 1.0;
     
@@ -971,6 +984,92 @@ const drawBandPoint = (
       return band?.Q || 1.0;
     }
     return 1.0;
+  };
+
+  const renderQAdjustmentUI = () => {
+    if (!isAdjustingQ || !selectedBandForQ) return null;
+    
+    const currentQ = getBandQ(selectedBandForQ.bandId, selectedBandForQ.channel);
+    const channelColor = selectedBandForQ.channel === 'left' 
+      ? 'bg-blue-600 text-white' 
+      : selectedBandForQ.channel === 'right'
+        ? 'bg-red-600 text-white'
+        : 'bg-orange-600 text-white';
+    
+    const handleClose = () => {
+      setIsAdjustingQ(false);
+      setSelectedBandForQ(null);
+    };
+    
+    return (
+      <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-md p-3">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center">
+            <span className={`px-2 py-0.5 rounded text-xs ${channelColor}`}>
+              {selectedBandForQ.channel === 'left' 
+                ? 'Left Ear' 
+                : selectedBandForQ.channel === 'right' 
+                  ? 'Right Ear' 
+                  : 'Both Ears'}
+            </span>
+            <span className="ml-2 text-sm font-medium">Q Value Adjustment</span>
+          </div>
+          <Button 
+            size="sm" 
+            variant="ghost"
+            className="h-6 w-6 p-0 text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+            onClick={handleClose}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+        
+        <div className="flex items-center gap-3">
+          <Button 
+            size="sm" 
+            variant="outline" 
+            className="h-7 px-2"
+            onClick={() => handleQChange(Math.max(0.1, currentQ - 0.5))}
+          >
+            <MinusCircle className="h-3 w-3" />
+          </Button>
+          
+          <div className="flex-1">
+            <Slider
+              min={0.1}
+              max={maxQValue}
+              step={0.1}
+              value={[currentQ]}
+              onValueChange={(values) => handleQChange(values[0])}
+              className="q-adjustment-slider"
+            />
+            <div className="flex justify-between text-xs text-gray-500 mt-1">
+              <span>Wider</span>
+              <span>Narrower</span>
+            </div>
+          </div>
+          
+          <Button 
+            size="sm" 
+            variant="outline" 
+            className="h-7 px-2"
+            onClick={() => handleQChange(Math.min(maxQValue, currentQ + 0.5))}
+          >
+            <PlusCircle className="h-3 w-3" />
+          </Button>
+          
+          <div className="bg-gray-100 px-3 py-1 rounded-md font-mono text-sm min-w-[50px] text-center">
+            {currentQ.toFixed(1)}
+          </div>
+        </div>
+        
+        <div className="text-xs text-gray-500 mt-2">
+          <p><strong>Q Value</strong> controls how wide or narrow the EQ adjustment is:</p>
+          <p>• Low Q values (0.1-3): Wide, gentle adjustments</p>
+          <p>• High Q values (3-30): Narrow, precise adjustments</p>
+        </div>
+      </div>
+    );
   };
 
   /**
@@ -1262,9 +1361,6 @@ const handleMouseUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
       className="relative w-full h-full border border-gray-200 rounded-md overflow-hidden"
       style={{ height: window.innerWidth >= 768 ? 'auto' : height }}
     >
-      {/* Instructions for Q adjustment */}
-
-      
       <div className="p-2 w-full h-full">
         <canvas
           ref={canvasRef}
@@ -1278,34 +1374,8 @@ const handleMouseUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
       </div>
       
       {/* Q adjustment slider */}
-      {isAdjustingQ && selectedBandForQ && (
-        <div className="absolute bottom-0 left-0 right-0 bg-black/80 text-white p-2 flex items-center gap-2">
-          <span className="text-xs whitespace-nowrap">Q Value:</span>
-          <Slider
-  min={0.1}
-  max={maxQValue || 30} // Use the prop or default to 20
-  step={0.1}
-  value={[getBandQ(selectedBandForQ.bandId, selectedBandForQ.channel)]}
-  onValueChange={(values) => handleQChange(values[0])}
-  className="flex-1"
-/>
-          <span className="text-xs font-mono">{getBandQ(selectedBandForQ.bandId, selectedBandForQ.channel).toFixed(1)}</span>
-          <Button 
-            size="sm" 
-            variant="ghost"
-            className="h-6 w-6 p-0 text-white"
-            onClick={() => {
-              setIsAdjustingQ(false);
-              setSelectedBandForQ(null);
-            }}
-          >
-            <X className="h-3 w-3" />
-          </Button>
-        </div>
-      )}
-      
+      {renderQAdjustmentUI()}
     </div>
-
   );
 };
 

@@ -32,33 +32,36 @@ export const DEFAULT_PRESETS: Record<string, Preset> = {
     bands: DEFAULT_FREQUENCY_BANDS.map(band => ({ ...band, gain: 0 }))
   },
 
-  notchFilter: {
-    id: 'notchFilter',
-    name: 'Notch Filter',
-    description: 'Targets the 5-7kHz range where tinnitus commonly occurs',
-    color: {
-      active: { bg: "#1D4ED8", text: "white" },
-      inactive: { bg: "#DBEAFE", text: "#1E40AF" }
-    },
-    bands: DEFAULT_FREQUENCY_BANDS.map(band => {
-      // Create focused notches at the most common tinnitus frequencies
-      if (band.frequency === 5000) {
-        return { ...band, gain: -12, Q: 7.0 };
-      } else if (band.frequency === 6000) {
-        return { ...band, gain: -10, Q: 7.0 };
-      } else if (band.frequency === 7000) {
-        return { ...band, gain: -8, Q: 7.0 };
-      } else if (band.frequency === 4000 || band.frequency === 8000) {
-        // Less aggressive at the edges of the common range
-        return { ...band, gain: -6, Q: 5.0 };
-      }
-      // Add a touch of bass for comfort
-      else if (band.frequency < 300) {
-        return { ...band, gain: 2 };
-      }
-      return { ...band, gain: 0 };
-    })
+// In the notchFilter preset description:
+notchFilter: {
+  id: 'notchFilter',
+  name: 'Notch Filter',
+  description: 'Targets the 3-8kHz range where tinnitus commonly occurs',
+  color: {
+    active: { bg: "#1D4ED8", text: "white" },
+    inactive: { bg: "#DBEAFE", text: "#1E40AF" }
   },
+  bands: DEFAULT_FREQUENCY_BANDS.map(band => {
+    // Create focused notches at the most common tinnitus frequencies
+    if (band.frequency === 4000) {
+      return { ...band, gain: -10, Q: 7.0 };
+    } else if (band.frequency === 5000) {
+      return { ...band, gain: -12, Q: 7.0 };
+    } else if (band.frequency === 6000) {
+      return { ...band, gain: -10, Q: 7.0 };
+    } else if (band.frequency === 7000) {
+      return { ...band, gain: -8, Q: 7.0 };
+    } else if (band.frequency === 3000 || band.frequency === 8000) {
+      // Less aggressive at the edges of the common range
+      return { ...band, gain: -6, Q: 5.0 };
+    }
+    // Add a touch of bass for comfort
+    else if (band.frequency < 300) {
+      return { ...band, gain: 2 };
+    }
+    return { ...band, gain: 0 };
+  })
+},
 
   speechClarity: {
     id: 'speechClarity',
@@ -150,15 +153,15 @@ export const CALIBRATION_STEPS = [
   },
   {
     title: 'Identify Your Tinnitus Frequency',
-    description: 'Select the tone that most closely matches your tinnitus sound. Research shows that most people with tinnitus experience frequencies between 5-7kHz (Pantev et al., 2012).'
+    description: 'Select the tone that most closely matches your tinnitus sound. Research shows that most people with tinnitus experience frequencies between 3-8kHz, with peaks around 4-6kHz (Pantev et al., 2012).'
   },
   {
     title: 'Fine-Tune the Frequency',
-    description: 'Adjust the slider to match your exact tinnitus pitch. Studies show that precise frequency matching is crucial for effective notched sound therapy.'
+    description: 'Adjust the slider to match your exact tinnitus pitch. Studies show that precise frequency matching is crucial for effective notched sound therapy (Okamoto et al., 2010).'
   },
   {
     title: 'Adjust Filter Settings',
-    description: 'Set the notch depth (how much to reduce the tinnitus frequency) and width (how many nearby frequencies to affect). Research suggests a reduction of 10-15dB with moderate width provides optimal results.'
+    description: 'Set the notch depth (how much to reduce the tinnitus frequency) and width (how many nearby frequencies to affect). Research suggests a reduction of 10-15dB with moderate width provides optimal results (Reavis et al., 2012).'
   },
   {
     title: 'Save Your Preset',

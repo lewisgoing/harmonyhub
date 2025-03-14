@@ -140,58 +140,7 @@ const isMobile = useIsMobile(); // This comes from your existing hooks/use-mobil
     }
   };
 
-  
 
-  // Add this component to your PlayerContainer.tsx
-const TinnitusHelpButton = () => {
-  const [isOpen, setIsOpen] = useState(false);
-  
-  return (
-    <>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => setIsOpen(true)}
-        className="text-xs flex items-center gap-1 bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100"
-      >
-        <Headphones className="h-3 w-3" />
-        Tinnitus Help
-      </Button>
-      
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Tinnitus Relief Tips</DialogTitle>
-            <DialogDescription>
-              Quick guidance for using EQ to help with tinnitus
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4">
-            <div className="p-3 bg-purple-50 rounded-md space-y-2">
-              <h3 className="font-medium text-sm">What might help:</h3>
-              <ul className="text-sm space-y-1.5 list-disc pl-4">
-                <li>Try using a <strong>notch filter</strong> at your tinnitus frequency</li>
-                <li>Use the <strong>Calibration Wizard</strong> to find your exact frequency</li>
-                <li>Boost lower frequencies slightly for masking</li>
-                <li>Try <strong>Split Ear Mode</strong> if your tinnitus is stronger in one ear</li>
-              </ul>
-            </div>
-            
-            <div className="p-3 bg-blue-50 rounded-md">
-              <h3 className="font-medium text-sm">Recommended Presets:</h3>
-              <p className="text-sm mt-1">Start with <strong>Notch Filter</strong> or <strong>Gentle Relief</strong> presets, then customize to your hearing.</p>
-            </div>
-          </div>
-          
-          <DialogFooter>
-            <Button onClick={() => setIsOpen(false)}>Got it</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
-  );
-};
 
   
   // Audio context state
@@ -1123,7 +1072,7 @@ const handleBandChange = (
         <Headphones className="h-4 w-4 mr-2" />
         Calibration
       </Button>
-      <TinnitusHelpButton />
+      <TinnitusGuide />
     </div>
     
     {/* Simplified tab system for mobile */}
@@ -1259,7 +1208,7 @@ const handleBandChange = (
         
         {/* Right column - EQ visualization and controls */}
         <div className="w-3/5 lg:w-2/3">
-        <div className="p-6 space-y-6">
+        <div className="p-6 space-y-4">
             {/* EQ visualization - larger for desktop */}
             <div className='relative'>
                             <EQVisualization 
@@ -1300,8 +1249,8 @@ const handleBandChange = (
               </TooltipProvider>
             </div>
             
-            <div className="text-xs text-gray-500 bg-white/80 px-2 py-1 rounded-sm mb-4">
-              Double-click point to adjust Q
+            <div className="text-xs text-gray-500 bg-white/80 px-2 rounded-sm">
+              Double-click point to adjust how wide or narrow the EQ adjustment is (Q-value)
             </div>
             
             {/* EQ controls */}

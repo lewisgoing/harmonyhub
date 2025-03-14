@@ -1,3 +1,11 @@
 {
-  "/page": "app/page.js"
+  "/_not-found/page": "app/_not-found/page.js",
+  "/api/youtube-metadata/route": "app/api/youtube-metadata/route.js",
+  "/favicon.ico/route": "app/favicon.ico/route.js",
+  "/apple-icon.png/route": "app/apple-icon.png/route.js",
+  "/page": "app/page.js",
+  "/icon.png/route": "app/icon.png/route.js",
+  "/manifest.json/route": "app/manifest.json/route.js",
+  "/icon.svg/route": "app/icon.svg/route.js",
+  "/login/page": "app/login/page.js"
 }

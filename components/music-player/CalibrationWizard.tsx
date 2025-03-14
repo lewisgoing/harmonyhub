@@ -622,62 +622,62 @@ const createCustomPreset = () => {
             </motion.div>
             
             <motion.div 
-              className="grid grid-cols-2 gap-2"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.3 }}
-            >
-              <div>
-                <Label>Fine Adjustment</Label>
-                <div className="flex gap-1 mt-1">
-                  <Button 
-                    size="sm"
-                    variant="outline" 
-                    onClick={() => handleFrequencyChange([customFrequency - 50])}
-                    className="rounded-full"
-                  >
-                    <MinusCircle className="mr-1 h-3 w-3" />
-                    50 Hz
-                  </Button>
-                  <Button 
-                    size="sm"
-                    variant="outline" 
-                    onClick={() => handleFrequencyChange([customFrequency - 10])}
-                    className="rounded-full"
-                  >
-                    <MinusCircle className="mr-1 h-3 w-3" />
-                    10 Hz
-                  </Button>
-                </div>
-              </div>
-              
-              <div>
-                <Label>&nbsp;</Label>
-                <div className="flex gap-1 mt-1">
-                  <Button 
-                    size="sm"
-                    variant="outline" 
-                    onClick={() => handleFrequencyChange([customFrequency + 10])}
-                    className="rounded-full"
-                  >
-                    <PlusCircle className="mr-1 h-3 w-3" />
-                    10 Hz
-                  </Button>
-                  <Button 
-                    size="sm"
-                    variant="outline" 
-                    onClick={() => handleFrequencyChange([customFrequency + 50])}
-                    className="rounded-full"
-                  >
-                    <PlusCircle className="mr-1 h-3 w-3" />
-                    50 Hz
-                  </Button>
-                </div>
-              </div>
-            </motion.div>
+  className="grid grid-cols-2 gap-4 w-full"
+  initial={{ opacity: 0 }}
+  animate={{ opacity: 1 }}
+  transition={{ delay: 0.3 }}
+>
+  <div className='w-full'>
+    <Label>Fine Adjustment</Label>
+    <div className="flex justify-between w-full mt-1 gap-2">
+      <Button 
+        size="sm"
+        variant="outline" 
+        onClick={() => handleFrequencyChange([customFrequency - 50])}
+        className="rounded-full flex-1"
+      >
+        <MinusCircle className="mr-1 h-3 w-3" />
+        50 Hz
+      </Button>
+      <Button 
+        size="sm"
+        variant="outline" 
+        onClick={() => handleFrequencyChange([customFrequency - 10])}
+        className="rounded-full flex-1"
+      >
+        <MinusCircle className="mr-1 h-3 w-3" />
+        10 Hz
+      </Button>
+    </div>
+  </div>
+  
+  <div className='w-full'>
+    <Label>&nbsp;</Label>
+    <div className="flex justify-between w-full mt-1 gap-2">
+      <Button 
+        size="sm"
+        variant="outline" 
+        onClick={() => handleFrequencyChange([customFrequency + 10])}
+        className="rounded-full flex-1"
+      >
+        <PlusCircle className="mr-1 h-3 w-3" />
+        10 Hz
+      </Button>
+      <Button 
+        size="sm"
+        variant="outline" 
+        onClick={() => handleFrequencyChange([customFrequency + 50])}
+        className="rounded-full flex-1"
+      >
+        <PlusCircle className="mr-1 h-3 w-3" />
+        50 Hz
+      </Button>
+    </div>
+  </div>
+</motion.div>
             
             <motion.div 
-              className="flex items-center gap-2 pt-2"
+              className="flex items-center gap-2 pt-1"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.5 }}

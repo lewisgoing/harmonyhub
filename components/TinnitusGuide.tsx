@@ -196,16 +196,16 @@ export const TinnitusGuide = () => {
                   </p>
                   
                   <div className="space-y-2">
-                    <div className="p-3 bg-blue-50 rounded-md">
-                      <h4 className="text-sm font-medium text-blue-800">Notch Therapy</h4>
-                      <p className="text-xs mt-1 text-blue-700">
-                        Research shows that reducing sound energy at your tinnitus frequency can help decrease neural hyperactivity.
-                        This approach, often called "notched sound therapy," may reduce tinnitus perception over time.
-                        <span className="block mt-1 italic">
-                          Source: Okamoto et al. (2010), PNAS: "Listening to tailor-made notched music reduces tinnitus loudness"
-                        </span>
-                      </p>
-                    </div>
+<div className="p-3 bg-blue-50 rounded-md">
+  <h4 className="text-sm font-medium text-blue-800">Notch Therapy</h4>
+  <p className="text-xs mt-1 text-blue-700">
+    Research shows that reducing sound energy at your tinnitus frequency can help decrease neural hyperactivity.
+    This approach, often called "notched sound therapy," may reduce tinnitus perception over time. Most individuals with tinnitus experience frequencies in the 3-8kHz range, with peaks around 4-6kHz.
+    <span className="block mt-1 italic">
+      Source: Okamoto et al. (2010), PNAS: "Listening to tailor-made notched music reduces tinnitus loudness"
+    </span>
+  </p>
+</div>
                     
                     <div className="p-3 bg-green-50 rounded-md">
                       <h4 className="text-sm font-medium text-green-800">Masking & Distraction</h4>

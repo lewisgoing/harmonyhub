@@ -146,14 +146,52 @@ export class AudioEngine {
     leftMagnitudes: Float32Array, 
     rightMagnitudes: Float32Array
   } | undefined {
-    // Mark cache as invalid to force refresh
+    // Always mark cache as invalid to force refresh
     this.cacheInvalidated = true;
     
-    // Return fresh frequency response data
-    if (this.nodes.context) {
-      return this.getFrequencyResponse();
+    // Check if audio context is ready
+    if (!this.nodes.context || this.nodes.context.state === 'suspended') {
+      console.log("Audio context not ready, attempting to resume");
+      
+      // Try to resume context if suspended
+      if (this.nodes.context?.state === 'suspended') {
+        this.nodes.context.resume().catch(err => {
+          console.warn("Failed to resume audio context:", err);
+        });
+      }
+      
+      // Return approximated response if context isn't ready
+      const numPoints = 200;
+      const frequencies = new Float32Array(numPoints);
+      const leftMagnitudes = new Float32Array(numPoints);
+      const rightMagnitudes = new Float32Array(numPoints);
+      
+      // Initialize with logarithmic frequency scale (20Hz to 20kHz)
+      for (let i = 0; i < numPoints; i++) {
+        frequencies[i] = 20 * Math.pow(10, i / numPoints * 3);
+      }
+      
+      // Generate approximated response
+      if (this.splitEarMode) {
+        this.approximateResponse(frequencies, leftMagnitudes, this.leftEarBands);
+        this.approximateResponse(frequencies, rightMagnitudes, this.rightEarBands);
+      } else {
+        this.approximateResponse(frequencies, leftMagnitudes, this.unifiedBands);
+        // Copy left channel response to right for unified mode
+        for (let i = 0; i < numPoints; i++) {
+          rightMagnitudes[i] = leftMagnitudes[i];
+        }
+      }
+      
+      // Cache and return this approximated response
+      this.lastResponseCache = { frequencies, leftMagnitudes, rightMagnitudes };
+      this.cacheInvalidated = false;
+      
+      return { frequencies, leftMagnitudes, rightMagnitudes };
     }
-    return undefined;
+    
+    // Return fresh frequency response data
+    return this.getFrequencyResponse();
   }
 
   /**
@@ -510,12 +548,17 @@ private applyBandsToFilters(
       const freq = frequencies[i];
       let totalGain = 0;
       
-      // Sum the contribution of each band
+      // Sum the contribution of each band with improved approximation
       for (const band of bands) {
-        // Improved approximation of a peaking filter response with better Q handling
-        const normalizedFreq = Math.log(freq / band.frequency);
-        // Adjust this formula to better handle higher Q values
-        const response = band.gain * Math.exp(-normalizedFreq * normalizedFreq * (band.Q * 0.5));
+        // Improved calculation using log scaling for better representation
+        const frequencyRatio = freq / band.frequency;
+        const logRatio = Math.log2(frequencyRatio);
+        
+        // This formula better approximates the behavior of BiquadFilter
+        // It uses the band's Q value properly
+        const bandwidth = 1.0 / band.Q;
+        const response = band.gain * Math.exp(-logRatio * logRatio / (2.0 * bandwidth * bandwidth));
+        
         totalGain += response;
       }
       

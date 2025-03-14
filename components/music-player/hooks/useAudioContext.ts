@@ -41,6 +41,8 @@ export function useAudioContext({
     isLoaded: false
   });
   
+
+
   // Volume state (0-1)
   const [volume, setVolumeState] = useState(0.7);
   
@@ -350,6 +352,33 @@ export function useAudioContext({
       isLoaded: true  // Consider it loaded so playback can at least be attempted
     }));
   };
+
+  const initializeAudioContext = async (): Promise<boolean> => {
+    if (!audioEngineRef.current && audioRef.current) {
+      console.log("Explicitly initializing AudioContext on demand");
+      const engine = new AudioEngine(audioRef.current);
+      const success = await engine.initialize();
+      
+      if (success) {
+        audioEngineRef.current = engine;
+        
+        // Get initial frequency response
+        const responseData = engine.getFrequencyResponse();
+        if (onFrequencyResponseUpdate) {
+          onFrequencyResponseUpdate(responseData);
+        }
+        
+        return true;
+      }
+    } else if (audioEngineRef.current) {
+      // If already initialized, make sure it's ready
+      await audioEngineRef.current.ensureAudioContextReady();
+      return true;
+    }
+    
+    return false;
+  };
+  
   
   const handleTimeUpdate = () => {
     if (audioRef.current) {
@@ -385,7 +414,8 @@ export function useAudioContext({
     togglePlayPause,
     handleSeek,
     setVolume,
-    volume
+    volume,
+    initializeAudioContext
   };
 }
 

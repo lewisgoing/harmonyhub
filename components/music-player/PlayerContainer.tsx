@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -96,7 +96,7 @@ const PlayerContainer: React.FC = () => {
 
   
 
-  const [maxQValue, setMaxQValue] = useState<10 | 20 | 30>(20); 
+  const [maxQValue, setMaxQValue] = useState<10 | 20 | 30>(10); 
   const [activePresetTab, setActivePresetTab] = useState<string>("standard");
   // Frequency bands for EQ
   const [unifiedBands, setUnifiedBands] = useState<FrequencyBand[]>([...DEFAULT_FREQUENCY_BANDS]);
@@ -139,6 +139,8 @@ const isMobile = useIsMobile(); // This comes from your existing hooks/use-mobil
       setFrequencyResponseData(responseData);
     }
   };
+
+  
 
   // Add this component to your PlayerContainer.tsx
 const TinnitusHelpButton = () => {
@@ -240,6 +242,13 @@ const TinnitusHelpButton = () => {
       setFrequencyResponseData(responseData);
     }
   }, [audioEngine]);
+
+  useEffect(() => {
+    if (audioEngine && playbackState.isPlaying) {
+      // Force update frequency response data when playback starts
+      refreshVisualization();
+    }
+  }, [audioEngine, playbackState.isPlaying]);
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -424,9 +433,18 @@ const TinnitusHelpButton = () => {
       // Force an update of the frequency response data
       const responseData = audioEngine.getFrequencyResponse();
       setFrequencyResponseData(responseData);
+      
+      // Request another update after a short delay to ensure UI is consistent
+      setTimeout(() => {
+        if (audioEngine) {
+          const newResponseData = audioEngine.refreshFrequencyResponse();
+          if (newResponseData) {
+            setFrequencyResponseData(newResponseData);
+          }
+        }
+      }, 200);
     }
   };
-
   const handlePlayPause = async () => {
     // First ensure audio context is ready
     await ensureAudioContextReady();
@@ -526,14 +544,6 @@ const TinnitusHelpButton = () => {
     rightEQEnabled
   ]);
 
-  useEffect(() => {
-    if (audioEngine && !frequencyResponseData) {
-      // Initial calculation of frequency response
-      const responseData = audioEngine.getFrequencyResponse();
-      setFrequencyResponseData(responseData);
-    }
-  }, [audioEngine]);
-
 
   // In the togglePlayPause function or useEffect that runs after audio initialization
 useEffect(() => {
@@ -590,6 +600,16 @@ useEffect(() => {
       balance: value[0]
     }));
   };
+  
+  const refreshVisualization = useCallback(() => {
+    if (audioEngine) {
+      console.log("Manually refreshing visualization");
+      const responseData = audioEngine.refreshFrequencyResponse();
+      if (responseData) {
+        setFrequencyResponseData(responseData);
+      }
+    }
+  }, [audioEngine]);
 
   /**
    * Reset EQ to flat
@@ -742,6 +762,8 @@ const handleBandChange = (
       setFrequencyResponseData(responseData);
     }
   }
+
+  refreshVisualization();
 };
   /**
    * Handle frequency change for a band

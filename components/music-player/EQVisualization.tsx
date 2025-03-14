@@ -179,7 +179,7 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
   frequencyResponseData,
   onBandChange,
   onFrequencyChange,
-  maxQValue = 30,
+  maxQValue = 10,
   height = 160,
   showFrequencyLabels = true,
   showDbLabels = true,
@@ -300,16 +300,17 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
   /**
    * Draw the EQ curve on the canvas
    */
-  const drawEQCurve = useCallback(() => {
-    if (!canvasRef.current) return;
-    
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    
-    
-    const { width, height } = canvas;
-    
+const drawEQCurve = useCallback(() => {
+  if (!canvasRef.current) return;
+  
+  const canvas = canvasRef.current;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  
+  const { width, height } = canvas;
+  
+  // Use requestAnimationFrame for smoother rendering
+  requestAnimationFrame(() => {
     // Clear canvas
     ctx.clearRect(0, 0, width, height);
     
@@ -320,55 +321,41 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
     // Draw grid
     drawGrid(ctx, width, height);
     
-    // Always draw smooth curves first, whether frequency response data is available or not
-    if (isSplitEarMode) {
-      // Draw left ear curve with correct disabled state
-      drawBandCurve(ctx, leftEarBands, LEFT_EAR_COLOR, width, height, !leftEarEnabled);
-      
-      // Draw right ear curve with correct disabled state
-      drawBandCurve(ctx, rightEarBands, RIGHT_EAR_COLOR, width, height, !rightEarEnabled);
-      
-      // Add a legend
-      drawLegend(ctx, width, height);
+    // If frequency response data is available and valid, use it
+    if (frequencyResponseData && 
+        frequencyResponseData.frequencies.length > 0 && 
+        frequencyResponseData.leftMagnitudes.length > 0) {
+      drawFrequencyResponse(ctx, width, height);
     } else {
-      // Draw unified curve
-      drawBandCurve(ctx, unifiedBands, UNIFIED_COLOR, width, height);
+      // Otherwise use approximation
+      if (isSplitEarMode) {
+        drawBandCurve(ctx, leftEarBands, LEFT_EAR_COLOR, width, height, !leftEarEnabled);
+        drawBandCurve(ctx, rightEarBands, RIGHT_EAR_COLOR, width, height, !rightEarEnabled);
+      } else {
+        drawBandCurve(ctx, unifiedBands, UNIFIED_COLOR, width, height);
+      }
     }
     
-    // If frequency response data is available, use it instead
-    if (frequencyResponseData) {
-      // Clear the curves we just drew
-      ctx.clearRect(0, 0, width, height);
-      
-      // Draw background again
-      ctx.fillStyle = '#f8f9fa';
-      ctx.fillRect(0, 0, width, height);
-      
-      // Draw grid again
-      drawGrid(ctx, width, height);
-      
-      // Draw using frequency response data
-      drawFrequencyResponse(ctx, width, height);
-      
-      // Add legend if in split mode
-      if (isSplitEarMode) {
-        drawLegend(ctx, width, height);
-      }
+    // Add legend for split mode
+    if (isSplitEarMode) {
+      drawLegend(ctx, width, height);
     }
     
     // Draw interactive points
     if (interactive) {
       drawBandPoints(ctx, width, height);
     }
-  }, [
-    isEQEnabled,
-    isSplitEarMode,
-    unifiedBands,
-    leftEarBands,
-    rightEarBands,
-    frequencyResponseData,
-    height
-  ]);
+  });
+}, [
+  frequencyResponseData, 
+  isSplitEarMode, 
+  leftEarBands, 
+  rightEarBands, 
+  unifiedBands, 
+  leftEarEnabled, 
+  rightEarEnabled, 
+  interactive
+]);
 
 
   /**
@@ -469,6 +456,48 @@ ctx.fillText('Common Tinnitus Range (3-8kHz)', (xMin + xMax) / 2, height - 40);
       ctx.fillText(`-${DB_RANGE/2}dB`, 5, height - 15);
     }
   };
+
+  const getConsistentFrequencyResponse = useCallback(() => {
+    if (!frequencyResponseData || !canvasRef.current) return;
+    
+    const canvas = canvasRef.current;
+    const { width, height } = canvas;
+    
+    // Create temporary canvas for smoother transitions
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = width;
+    tempCanvas.height = height;
+    const tempCtx = tempCanvas.getContext('2d');
+    
+    if (!tempCtx) return;
+    
+    // Draw to temp canvas first
+    drawGrid(tempCtx, width, height);
+    
+    if (isSplitEarMode) {
+      drawBandCurve(tempCtx, leftEarBands, LEFT_EAR_COLOR, width, height, !leftEarEnabled);
+      drawBandCurve(tempCtx, rightEarBands, RIGHT_EAR_COLOR, width, height, !rightEarEnabled);
+      drawLegend(tempCtx, width, height);
+    } else {
+      drawBandCurve(tempCtx, unifiedBands, UNIFIED_COLOR, width, height);
+    }
+    
+    // Then copy to main canvas for smoother transition
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.clearRect(0, 0, width, height);
+      ctx.drawImage(tempCanvas, 0, 0);
+      
+      // Draw interactive points last
+      if (interactive) {
+        drawBandPoints(ctx, width, height);
+      }
+    }
+  }, [frequencyResponseData, isSplitEarMode, leftEarBands, rightEarBands, unifiedBands, leftEarEnabled, rightEarEnabled]);
+
+  useEffect(() => {
+    getConsistentFrequencyResponse();
+  }, [getConsistentFrequencyResponse]);
 
   /**
    * Draw a curve based on frequency bands

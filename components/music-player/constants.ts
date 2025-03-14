@@ -6,15 +6,15 @@ import { Preset, FrequencyBand, Song } from './types';
  */
 // In constants.ts
 export const DEFAULT_FREQUENCY_BANDS: FrequencyBand[] = [
-  { id: 'band1', frequency: 125, gain: 0, Q: 25.0 },   // Low bass
-  { id: 'band2', frequency: 250, gain: 0, Q: 25.0 },   // Bass
-  { id: 'band3', frequency: 500, gain: 0, Q: 25.0 },   // Low mids
-  { id: 'band4', frequency: 1000, gain: 0, Q: 25.0 },  // Mids
-  { id: 'band5', frequency: 2000, gain: 0, Q: 25.0 },  // Upper mids
-  { id: 'band6', frequency: 4000, gain: 0, Q: 25.0 },  // Presence
-  { id: 'band7', frequency: 6000, gain: 0, Q: 25.0 },  // Critical tinnitus range (added)
-  { id: 'band8', frequency: 8000, gain: 0, Q: 25.0 },  // Brilliance
-  { id: 'band9', frequency: 16000, gain: 0, Q: 25.0 }, // Air
+  { id: 'band1', frequency: 125, gain: 0, Q: 5.0 },   // Low bass
+  { id: 'band2', frequency: 250, gain: 0, Q: 5.0 },   // Bass
+  { id: 'band3', frequency: 500, gain: 0, Q: 5.0 },   // Low mids
+  { id: 'band4', frequency: 1000, gain: 0, Q: 5.0 },  // Mids
+  { id: 'band5', frequency: 2000, gain: 0, Q: 5.0 },  // Upper mids
+  { id: 'band6', frequency: 4000, gain: 0, Q: 5.0 },  // Presence
+  { id: 'band7', frequency: 6000, gain: 0, Q: 5.0 },  // Critical tinnitus range (added)
+  { id: 'band8', frequency: 8000, gain: 0, Q: 5.0 },  // Brilliance
+  { id: 'band9', frequency: 16000, gain: 0, Q: 5.0 }, // Air
 ];
 
 /**

@@ -182,9 +182,6 @@ const Presets: React.FC<PresetsProps> = ({
 })}
       </div>
       
-      {/* User presets (optional) */}
-
-
 {/* User presets (optional) */}
 {showUserPresets && Object.keys(userPresets).length > 0 && (
   <div className="space-y-2">

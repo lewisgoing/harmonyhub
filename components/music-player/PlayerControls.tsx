@@ -40,6 +40,7 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
   const [displayProgress, setDisplayProgress] = useState(progress);
   const [isSeeking, setIsSeeking] = useState(false);
   
+  
   // Throttle updates to avoid too many re-renders
   useEffect(() => {
     // Skip updates while user is seeking
@@ -83,7 +84,6 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
     if (volume < 0.5) return <Volume1 size={18} />;
     return <Volume2 size={18} />;
   };
-
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -97,25 +97,25 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
         </Button>
         
         {showVolumeControl && onVolumeChange && (
-          <div className="flex items-center space-x-2">
-            <Button 
-              size="icon" 
-              variant="ghost" 
-              className="h-8 w-8 text-gray-500"
-              onClick={() => onVolumeChange([volume === 0 ? 0.5 : 0])}
-            >
-              {getVolumeIcon()}
-            </Button>
-            <Slider 
-  className={`w-24 ${sliderClassName || 'bg-slate-200'}`}
-  value={[volume]}
-  min={0}
-  max={1}
-  step={0.01}
-  onValueChange={onVolumeChange}
-/>
-          </div>
-        )}
+  <div className="flex items-center space-x-2">
+    <Button 
+      size="icon" 
+      variant="ghost" 
+      className="h-8 w-8 text-gray-500"
+      onClick={() => onVolumeChange([volume === 0 ? 0.5 : 0])}
+    >
+      {getVolumeIcon()}
+    </Button>
+    <Slider 
+      className="w-24 player-slider" // Dark background style
+      value={[volume]}
+      min={0}
+      max={1}
+      step={0.01}
+      onValueChange={onVolumeChange}
+    />
+  </div>
+)}
         
         {!showVolumeControl && <div className="w-10" />}
       </div>
@@ -123,6 +123,7 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
       <div className="space-y-1">
       <div onPointerDown={handleSliderStart}>
   <Slider
+    className={`player-slider ${sliderClassName || ''}`} // Dark background style
     defaultValue={[displayProgress]}
     value={isSeeking ? undefined : [displayProgress]}
     min={0}
@@ -130,10 +131,9 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
     step={0.01}
     onValueChange={handleSliderChange}
     onValueCommit={handleSliderEnd}
-    className={`cursor-pointer ${sliderClassName || 'bg-slate-200'}`}
   />
 </div>
-        <div className="flex justify-between text-xs text-gray-500">
+        <div className="flex justify-between text-xs text-gray-300">
           <span>{formatTime(currentTime)}</span>
           <span>{formatTime(duration)}</span>
         </div>
@@ -141,5 +141,4 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
     </div>
   );
 };
-
 export default PlayerControls;

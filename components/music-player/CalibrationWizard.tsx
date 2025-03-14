@@ -243,15 +243,22 @@ const CalibrationWizard: React.FC<CalibrationWizardProps> = ({ onComplete, onCan
 const createCustomPreset = () => {
   const { frequency } = calibrationResultsRef.current;
 
-  const enforcedNotchDepth = -12; // Ensure this is consistently -12dB
+  // Always use these enforced values for consistency
+  const enforcedNotchDepth = -12; 
   const enforcedNotchWidth = 0.3;
-  
-  const finalNotchDepth = notchDepth;
   
   // Format frequency for display
   const formattedFreq = frequency >= 1000 ? 
     `${(frequency/1000).toFixed(1)}kHz` : 
     `${frequency.toFixed(0)}Hz`;
+  
+  console.log('Creating calibration preset:', {
+    frequency,
+    notchDepth,
+    enforcedNotchDepth,
+    enforcedNotchWidth,
+    isCalibrated: true
+  });
   
   // Create bands with our enforced settings
   const customBands: FrequencyBand[] = DEFAULT_FREQUENCY_BANDS.map(band => {
@@ -263,8 +270,8 @@ const createCustomPreset = () => {
       return {
         ...band,
         frequency, // Set exact tinnitus frequency
-        gain: finalNotchDepth, // Use what the UI showed
-        Q: notchWidth * 10 // Use what the UI showed
+        gain: enforcedNotchDepth, // USE ENFORCED VALUE
+        Q: enforcedNotchWidth * 10 // USE ENFORCED VALUE
       };
     }
     
@@ -278,11 +285,14 @@ const createCustomPreset = () => {
     return band;
   });
   
+  console.log('Created bands with notch filter:', customBands);
+  
   // Create the custom preset
   const customPreset: UserPreset = {
     id: `tinnitus-${Date.now()}`,
     name: presetName || `Tinnitus Relief ${formattedFreq}`,
-description: `Personalized tinnitus relief preset with ${Math.abs(enforcedNotchDepth)}dB notch filter at ${formattedFreq}. Created through calibration.`,description: `Personalized tinnitus relief preset with ${Math.abs(enforcedNotchDepth)}dB notch filter at ${formattedFreq}. Created through calibration.`,    color: {
+    description: `Personalized tinnitus relief preset with ${Math.abs(enforcedNotchDepth)}dB notch filter at ${formattedFreq}. Created through calibration.`,
+    color: {
       active: { bg: "#8B5CF6", text: "white" },
       inactive: { bg: "#EDE9FE", text: "#6D28D9" }
     },

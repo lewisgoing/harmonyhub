@@ -996,14 +996,15 @@ const handleBandChange = (
         
         <CardContent className="p-4 space-y-4">
           {/* Mobile player controls */}
-          <PlayerControls 
-            playbackState={playbackState}
-            onPlayPause={handlePlayPause}
-            onSeek={handleSeek}
-            onVolumeChange={values => setVolume(values[0])}
-            volume={volume}
-            showVolumeControl={true}
-          />
+<PlayerControls 
+  playbackState={playbackState}
+  onPlayPause={handlePlayPause}
+  onSeek={handleSeek}
+  onVolumeChange={values => setVolume(values[0])}
+  volume={volume}
+  showVolumeControl={true}
+  sliderClassName="ui-slider" // Use the light background style
+/>
           
           {/* EQ visualization */}
           <div className="relative">
@@ -1358,7 +1359,7 @@ const handleBandChange = (
             
             {/* Player controls */}
 {/* Player controls with improved sliders */}
-<div className="w-full max-w-sm dark-theme-slider">
+<div className="w-full max-w-sm">
   <PlayerControls 
     playbackState={playbackState}
     onPlayPause={handlePlayPause}
@@ -1366,7 +1367,19 @@ const handleBandChange = (
     onVolumeChange={values => setVolume(values[0])}
     volume={volume}
     showVolumeControl={true}
-    sliderClassName="bg-slate-500 h-2" // Thicker and lighter for better visibility
+    sliderClassName="player-slider"
+  />
+</div>
+
+
+<div className="md:hidden">
+  <PlayerControls 
+    playbackState={playbackState}
+    onPlayPause={handlePlayPause}
+    onSeek={handleSeek}
+    onVolumeChange={values => setVolume(values[0])}
+    volume={volume}
+    showVolumeControl={true}
   />
 </div>
             

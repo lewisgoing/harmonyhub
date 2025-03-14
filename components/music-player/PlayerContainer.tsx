@@ -1329,7 +1329,10 @@ const handleBandChange = (
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
+                    <div className="space-y-1 max-w-xs">
                     <p>Save current EQ as preset</p>
+                    </div>
+                    
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -1435,8 +1438,10 @@ const handleBandChange = (
                                       </div>
                                     </Button>
                                   </TooltipTrigger>
-                                  <TooltipContent side="right">
+                                  <TooltipContent side="right" className="z-50">
+                                  <div className="space-y-1 max-w-xs z-0">
                                     <p>{preset.description}</p>
+                                    </div>
                                   </TooltipContent>
                                 </Tooltip>
                               </TooltipProvider>
@@ -1479,8 +1484,10 @@ const handleBandChange = (
                                           </div>
                                         </Button>
                                       </TooltipTrigger>
-                                      <TooltipContent side="right">
-                                        <div className="space-y-1 max-w-xs">
+                                      <TooltipContent 
+  side="right" 
+  className="z-50 max-w-[300px] overflow-visible shadcn-tooltip-content"
+>                                        <div className="space-y-1 max-w-xs">
                                           <p className="font-medium">{preset.name}</p>
                                           <p className="text-xs">{preset.description}</p>
                                           {preset.tinnitusCenterFreq && (
@@ -1562,8 +1569,10 @@ const handleBandChange = (
                                           </div>
                                         </Button>
                                       </TooltipTrigger>
-                                      <TooltipContent side="right">
-                                        <div className="space-y-1 max-w-xs">
+<TooltipContent 
+  side="right" 
+  className="z-50 max-w-[300px] overflow-visible shadcn-tooltip-content"
+>                                        <div className="space-y-1 max-w-xs">
                                           <p className="font-medium">{preset.name}</p>
                                           <p className="text-xs">{preset.description}</p>
                                         </div>

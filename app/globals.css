@@ -242,3 +242,121 @@ body {
     @apply text-2xl md:text-3xl;
   }
 }
+
+/* Add these styles to your globals.css */
+
+/* Progress Slider - main playback slider */
+.progress-slider [data-orientation="horizontal"] {
+  @apply bg-gray-700;
+}
+
+.progress-slider [role="slider"] {
+  @apply bg-white border-white h-4 w-4;
+}
+
+.progress-slider [data-orientation="horizontal"] > div {
+  @apply bg-white;
+}
+
+/* Volume Slider - smaller and more subtle */
+.volume-slider [data-orientation="horizontal"] {
+  @apply bg-gray-700 h-1;
+}
+
+.volume-slider [role="slider"] {
+  @apply bg-white border-white h-3 w-3;
+}
+
+.volume-slider [data-orientation="horizontal"] > div {
+  @apply bg-white;
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .progress-slider [role="slider"] {
+    @apply h-5 w-5; /* Larger touch target on mobile */
+  }
+  
+  .progress-slider [data-orientation="horizontal"] {
+    @apply h-2; /* Thicker track on mobile */
+  }
+}
+
+.TooltipContent {
+  z-index: 50 !important;
+  max-width: 300px !important;
+  white-space: normal !important;
+}
+
+/* Make sure preset descriptions don't overflow their containers */
+.preset-name,
+.preset-description {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
+}
+
+/* Make preset buttons more predictable in height */
+.preset-button {
+  display: flex;
+  flex-direction: column;
+  min-height: 64px;
+  height: auto;
+  padding: 8px 12px;
+}
+
+/* Optional: Improve visibility of tooltip content */
+.TooltipContent {
+  background-color: rgba(0, 0, 0, 0.85) !important;
+  color: white !important;
+  padding: 8px 12px !important;
+  border-radius: 6px !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+  font-size: 12px !important;
+}
+
+/* Add these styles to your globals.css file */
+
+/* Target tooltip content specifically for right-side tooltips */
+[data-side="right"].TooltipContent,
+[data-side="right"] .TooltipContent {
+  z-index: 100 !important; /* Higher than other UI elements */
+}
+
+/* Ensure the tooltip portal itself has high z-index */
+.TooltipPortal {
+  z-index: 100 !important; 
+}
+
+/* Force tooltips to be above all other elements */
+.TooltipContent {
+  z-index: 100 !important;
+  position: relative !important;
+  pointer-events: none !important; /* Prevent tooltips from blocking interaction */
+}
+
+/* Fix for description overflow */
+.preset-button .preset-description {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+  display: block;
+}
+
+/* Fix container overflow */
+.preset-container {
+  overflow: visible !important; /* Ensure tooltips can extend beyond container */
+  position: relative; /* Create proper stacking context */
+}
+
+/* Adjust tooltip portal placement */
+body > div[data-radix-portal] {
+  position: fixed;
+  z-index: 9999; /* Extremely high z-index */
+  pointer-events: none;
+}
+body > div[data-radix-portal] > * {
+  pointer-events: auto;
+}

@@ -5,6 +5,7 @@ import { Play, Pause, Volume2, Volume1, VolumeX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { PlaybackState } from './types';
+import { cn } from "@/lib/utils";
 
 interface PlayerControlsProps {
   playbackState: PlaybackState;
@@ -13,7 +14,6 @@ interface PlayerControlsProps {
   onVolumeChange?: (value: number[]) => void;
   volume?: number;
   showVolumeControl?: boolean;
-  sliderClassName?: string;
 }
 
 const formatTime = (seconds: number): string => {
@@ -30,7 +30,6 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
   onVolumeChange,
   volume = 1,
   showVolumeControl = false,
-  sliderClassName,
 }) => {
   const { isPlaying, progress, currentTime, duration, isLoaded } = playbackState;
   
@@ -39,7 +38,6 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
   // Only use state for displayed values, not for controlling the slider
   const [displayProgress, setDisplayProgress] = useState(progress);
   const [isSeeking, setIsSeeking] = useState(false);
-  
   
   // Throttle updates to avoid too many re-renders
   useEffect(() => {
@@ -79,60 +77,108 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
     }
   };
 
-const getVolumeIcon = () => {
-  if (volume === 0) return <VolumeX size={18} stroke="white" fill="white" />;
-  if (volume < 0.5) return <Volume1 size={18} stroke="white" fill="white" />;
-  return <Volume2 size={18} stroke="white" fill="white" />;
-};
+  const getVolumeIcon = () => {
+    if (volume === 0) return <VolumeX size={18} fill="white" />;
+    if (volume < 0.5) return <Volume1 size={18} fill="white" />;
+    return <Volume2 size={18} fill="white" />;
+  };
+
+  // Apply direct classNames to override the default slider styles
+  const progressSliderClass = cn(
+    "w-full",
+    "player-slider"
+  );
+  
+  const volumeSliderClass = cn(
+    "w-24",
+    "volume-slider"
+  );
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="w-10" />
         
         <Button 
-          className="w-12 h-12 rounded-full bg-black text-white flex items-center justify-center hover:bg-gray-800 transition-colors player-controls-play-button"
+          className="w-12 h-12 rounded-full bg-white text-black flex items-center justify-center hover:bg-gray-200 transition-colors player-controls-play-button"
           onClick={onPlayPause}
         >
-          {isPlaying ? <Pause size={24} fill="white" /> : <Play size={24} fill="white" />}
+          {isPlaying ? <Pause size={24} fill="black" stroke="black" /> : <Play size={24} fill="black" stroke="black" />}
         </Button>
         
         {showVolumeControl && onVolumeChange && (
-  <div className="flex items-center space-x-2">
-    <Button 
-      size="icon" 
-      variant="ghost" 
-      className="h-8 w-8 text-gray-500"
-      onClick={() => onVolumeChange([volume === 0 ? 0.5 : 0])}
-    >
-      {getVolumeIcon()}
-    </Button>
-    <Slider 
-      className="w-24 player-slider" // Dark background style
-      value={[volume]}
-      min={0}
-      max={1}
-      step={0.01}
-      onValueChange={onVolumeChange}
-    />
-  </div>
-)}
+          <div className="flex items-center space-x-2">
+            <Button 
+              size="icon" 
+              variant="ghost" 
+              className="h-8 w-8"
+              onClick={() => onVolumeChange([volume === 0 ? 0.5 : 0])}
+            >
+              {getVolumeIcon()}
+            </Button>
+            <div className="inline-block relative">
+              <style jsx>{`
+                /* Direct styling via JSX */
+                :global(.volume-slider [data-orientation="horizontal"]) {
+                  background-color: #374151 !important;
+                  height: 4px !important;
+                }
+                :global(.volume-slider [data-orientation="horizontal"] > div) {
+                  background-color: white !important;
+                }
+                :global(.volume-slider [role="slider"]) {
+                  background-color: white !important;
+                  border-color: white !important;
+                  height: 12px !important;
+                  width: 12px !important;
+                }
+              `}</style>
+              <Slider 
+                className={volumeSliderClass}
+                value={[volume]}
+                min={0}
+                max={1}
+                step={0.01}
+                onValueChange={onVolumeChange}
+              />
+            </div>
+          </div>
+        )}
         
         {!showVolumeControl && <div className="w-10" />}
       </div>
       
       <div className="space-y-1">
-      <div onPointerDown={handleSliderStart}>
-  <Slider
-    className={`player-slider ${sliderClassName || ''}`} // Dark background style
-    defaultValue={[displayProgress]}
-    value={isSeeking ? undefined : [displayProgress]}
-    min={0}
-    max={100}
-    step={0.01}
-    onValueChange={handleSliderChange}
-    onValueCommit={handleSliderEnd}
-  />
-</div>
+        <div onPointerDown={handleSliderStart}>
+          <div className="inline-block relative w-full">
+            <style jsx>{`
+              /* Direct styling via JSX */
+              :global(.player-slider [data-orientation="horizontal"]) {
+                background-color: #374151 !important;
+                height: 4px !important;
+              }
+              :global(.player-slider [data-orientation="horizontal"] > div) {
+                background-color: white !important;
+              }
+              :global(.player-slider [role="slider"]) {
+                background-color: white !important;
+                border-color: white !important;
+                height: 16px !important;
+                width: 16px !important;
+              }
+            `}</style>
+            <Slider
+              className={progressSliderClass}
+              defaultValue={[displayProgress]}
+              value={isSeeking ? undefined : [displayProgress]}
+              min={0}
+              max={100}
+              step={0.01}
+              onValueChange={handleSliderChange}
+              onValueCommit={handleSliderEnd}
+            />
+          </div>
+        </div>
         <div className="flex justify-between text-xs text-gray-300">
           <span>{formatTime(currentTime)}</span>
           <span>{formatTime(duration)}</span>
@@ -141,4 +187,5 @@ const getVolumeIcon = () => {
     </div>
   );
 };
+
 export default PlayerControls;

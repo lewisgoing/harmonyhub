@@ -1,4 +1,3 @@
-"use client";
 import React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -30,7 +29,7 @@ interface PresetsProps {
 }
 
 /**
- * Presets Component
+ * Presets Component with overflow and tooltip fixes
  */
 const Presets: React.FC<PresetsProps> = ({
   presets,
@@ -112,170 +111,151 @@ const Presets: React.FC<PresetsProps> = ({
       
       {/* Built-in presets */}
       <div className="grid grid-cols-2 gap-2">
-      {Object.values(userPresets).map((preset, index) => {
-  const isActive = activePresetId === preset.id;
-  const style = preset.color;
-  
-  return (
-    <motion.div 
-      key={preset.id} 
-      className="relative group"
-      custom={index}
-      initial="hidden"
-      animate="visible"
-      whileHover="hover"
-      whileTap="tap"
-      variants={buttonVariants}
-    >
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              className={`text-sm font-medium rounded-md shadow-sm transition-colors w-full h-auto py-2 justify-start overflow-hidden ${
-                preset.isCalibrated ? 'border-l-4 border-purple-500' : ''
-              }`}
-              style={{
-                backgroundColor: isActive ? style.active.bg : style.inactive.bg,
-                color: isActive ? style.active.text : style.inactive.text,
-                border: preset.isCalibrated ? undefined : "none",
-              }}
-              onClick={() => onPresetSelect(preset)}
+        {Object.values(presets).map((preset, index) => {
+          const isActive = activePresetId === preset.id;
+          const style = preset.color;
+          
+          return (
+            <motion.div 
+              key={preset.id} 
+              custom={index}
+              initial="hidden"
+              animate="visible"
+              whileHover="hover"
+              whileTap="tap"
+              variants={buttonVariants}
             >
-              <div className="flex flex-col items-start">
-                {preset.isCalibrated && (
-                  <div className="flex items-center gap-1 text-[9px] opacity-80 mb-0.5">
-                    <Headphones className="h-2 w-2" />
-                    <span>Calibrated</span>
-                  </div>
-                )}
-                
-                <span className="font-medium">{preset.name}</span>
-                
-                {/* Show tinnitus frequency if available */}
-                {preset.tinnitusCenterFreq && (
-                  <span className="text-xs opacity-70">
-                    {preset.tinnitusCenterFreq >= 1000 ? 
-                      `${(preset.tinnitusCenterFreq/1000).toFixed(1)}kHz` : 
-                      `${preset.tinnitusCenterFreq.toFixed(0)}Hz`}
-                  </span>
-                )}
-              </div>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <div className="space-y-1 max-w-xs">
-              <p className="font-medium">{preset.name}</p>
-              <p className="text-xs">{preset.description}</p>
-              {preset.tinnitusCenterFreq && (
-                <p className="text-xs">
-                  {preset.isCalibrated ? 
-                    `Calibrated for your tinnitus at ${preset.tinnitusCenterFreq.toFixed(0)}Hz` : 
-                    `Tinnitus frequency: ${preset.tinnitusCenterFreq.toFixed(0)}Hz`}
-                </p>
-              )}
-            </div>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-    </motion.div>
-  );
-})}
+<TooltipProvider>
+  <Tooltip>
+    <TooltipTrigger asChild>
+      <Button
+        className="text-sm font-medium rounded-md shadow-sm transition-colors w-full h-auto py-2 justify-start preset-button"
+        style={{
+          backgroundColor: isActive ? style.active.bg : style.inactive.bg,
+          color: isActive ? style.active.text : style.inactive.text,
+          border: "none",
+        }}
+        onClick={() => onPresetSelect(preset)}
+      >
+        <div className="flex flex-col items-start w-full overflow-visible preset-container">
+          <span className="font-medium truncate w-full preset-name">{preset.name}</span>
+          <span className="text-xs opacity-70 truncate w-full preset-description">{preset.description}</span>
+        </div>
+      </Button>
+    </TooltipTrigger>
+    <TooltipContent 
+      side="left" 
+      align="center" 
+      sideOffset={5}
+      className="z-[9999] max-w-xs tooltip-content"
+      forceMount
+    >
+      <div className="space-y-1">
+        <p className="font-medium">{preset.name}</p>
+        <p className="text-xs">{preset.description}</p>
+        {preset.tinnitusCenterFreq && (
+          <p className="text-xs">Tinnitus frequency: {preset.tinnitusCenterFreq.toFixed(0)}Hz</p>
+        )}
+      </div>
+    </TooltipContent>
+  </Tooltip>
+</TooltipProvider>
+            </motion.div>
+          );
+        })}
       </div>
       
-{/* User presets (optional) */}
-{showUserPresets && Object.keys(userPresets).length > 0 && (
-  <div className="space-y-2">
-    <div className="flex items-center">
-      <Badge variant="outline" className="text-xs bg-gradient-to-r from-blue-50 to-purple-50 text-blue-700">Custom</Badge>
-    </div>
-    
-    <div className="grid grid-cols-2 gap-2">
-      {Object.values(userPresets).map((preset, index) => {
-        const isActive = activePresetId === preset.id;
-        const style = preset.color;
-        
-        return (
-          <motion.div 
-            key={preset.id} 
-            className="relative group"
-            custom={index}
-            initial="hidden"
-            animate="visible"
-            whileHover="hover"
-            whileTap="tap"
-            variants={buttonVariants}
-          >
-            <TooltipProvider delayDuration={300} skipDelayDuration={0}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    className="text-sm font-medium rounded-md shadow-sm transition-colors w-full h-auto py-2 justify-start overflow-hidden"
-                    style={{
-                      backgroundColor: isActive ? style.active.bg : style.inactive.bg,
-                      color: isActive ? style.active.text : style.inactive.text,
-                      border: "none",
-                    }}
-                    onClick={() => onPresetSelect(preset)}
-                  >
-                    <div className="flex flex-col items-start">
-                      <span className="font-medium">{preset.name}</span>
-                      
-                      {/* Show tinnitus frequency if available */}
-                      {preset.tinnitusCenterFreq && (
-                        <span className="text-xs opacity-70">
-                          {preset.tinnitusCenterFreq.toFixed(0)}Hz
-                        </span>
-                      )}
-                    </div>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent       side="right" 
-      align="center" 
-      sideOffset={5} 
-      className="z-50">
-                  <div className="space-y-1 max-w-xs">
-                    <p className="font-medium">{preset.name}</p>
-                    <p className="text-xs">{preset.description}</p>
-                    {preset.tinnitusCenterFreq && (
-                      <p className="text-xs">Tinnitus frequency: {preset.tinnitusCenterFreq.toFixed(0)}Hz</p>
-                    )}
-                  </div>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            
-            {/* Delete button (only shows on hover) */}
-            {showDeleteButton && onDeletePreset && (
-              <motion.div
-                className="absolute -right-2 -top-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                initial={{ opacity: 0, rotate: -45 }}
-                whileHover={{ opacity: 1, rotate: 0, scale: 1.1 }}
-              >
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 rounded-full bg-white shadow border border-gray-200"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDeletePreset(preset.id);
-                  }}
+      {/* User presets (optional) */}
+      {showUserPresets && Object.keys(userPresets).length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center">
+            <Badge variant="outline" className="text-xs bg-gradient-to-r from-blue-50 to-purple-50 text-blue-700">Custom</Badge>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-2">
+            {Object.values(userPresets).map((preset, index) => {
+              const isActive = activePresetId === preset.id;
+              const style = preset.color;
+              
+              return (
+                <motion.div 
+                  key={preset.id} 
+                  className="relative group"
+                  custom={index}
+                  initial="hidden"
+                  animate="visible"
+                  whileHover="hover"
+                  whileTap="tap"
+                  variants={buttonVariants}
                 >
-                  <Trash2 className="h-3 w-3 text-red-500" />
-                </Button>
-              </motion.div>
-            )}
-            
-            {/* Date badge */}
-            <div className="absolute -bottom-2 right-2 text-[10px] bg-white/80 rounded-full px-1.5 py-0.5 flex items-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm">
-              <Calendar className="h-2 w-2 mr-0.5" />
-              {formatDate(preset.dateCreated)}
-            </div>
-          </motion.div>
-        );
-      })}
-    </div>
-  </div>
-)}
+<TooltipProvider>
+  <Tooltip>
+    <TooltipTrigger asChild>
+      <Button
+        className="text-sm font-medium rounded-md shadow-sm transition-colors w-full h-auto py-2 justify-start preset-button"
+        style={{
+          backgroundColor: isActive ? style.active.bg : style.inactive.bg,
+          color: isActive ? style.active.text : style.inactive.text,
+          border: "none",
+        }}
+        onClick={() => onPresetSelect(preset)}
+      >
+        <div className="flex flex-col items-start w-full overflow-visible preset-container">
+          <span className="font-medium truncate w-full preset-name">{preset.name}</span>
+          <span className="text-xs opacity-70 truncate w-full preset-description">{preset.description}</span>
+        </div>
+      </Button>
+    </TooltipTrigger>
+    <TooltipContent 
+      side="left" 
+      align="center" 
+      sideOffset={5}
+      className="z-[9999] max-w-xs tooltip-content"
+      forceMount
+    >
+      <div className="space-y-1">
+        <p className="font-medium">{preset.name}</p>
+        <p className="text-xs">{preset.description}</p>
+        {preset.tinnitusCenterFreq && (
+          <p className="text-xs">Tinnitus frequency: {preset.tinnitusCenterFreq.toFixed(0)}Hz</p>
+        )}
+      </div>
+    </TooltipContent>
+  </Tooltip>
+</TooltipProvider>
+                  
+                  {/* Delete button (only shows on hover) */}
+                  {showDeleteButton && onDeletePreset && (
+                    <motion.div
+                      className="absolute -right-2 -top-2 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                      initial={{ opacity: 0, rotate: -45 }}
+                      whileHover={{ opacity: 1, rotate: 0, scale: 1.1 }}
+                    >
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 rounded-full bg-white shadow border border-gray-200"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeletePreset(preset.id);
+                        }}
+                      >
+                        <Trash2 className="h-3 w-3 text-red-500" />
+                      </Button>
+                    </motion.div>
+                  )}
+                  
+                  {/* Date badge */}
+                  <div className="absolute -bottom-2 right-2 text-[10px] bg-white/80 rounded-full px-1.5 py-0.5 flex items-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm z-10">
+                    <Calendar className="h-2 w-2 mr-0.5" />
+                    {formatDate(preset.dateCreated)}
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1202,7 +1202,7 @@ const handleBandChange = (
           
           {/* App info */}
           <div className="p-4 text-xs text-white/60 text-center">
-            <p>Customize your listening experience with Hearing Heroes</p>
+            <p>Customize your listening experience with Harmony Hub</p>
           </div>
         </div>
         

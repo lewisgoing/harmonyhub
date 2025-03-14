@@ -1,44 +1,15 @@
 {
   "pages": {
-    "/_not-found/page": [
-      "static/chunks/webpack-e2aa441a245b0fdf.js",
-      "static/chunks/fd9d1056-796f5f0836d7e441.js",
-      "static/chunks/117-adbb5cfa097411cc.js",
-      "static/chunks/main-app-956433cae3ee42dd.js",
-      "static/chunks/app/_not-found/page-12f067ceb7415e55.js"
+    "/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/page.js"
     ],
     "/layout": [
-      "static/chunks/webpack-e2aa441a245b0fdf.js",
-      "static/chunks/fd9d1056-796f5f0836d7e441.js",
-      "static/chunks/117-adbb5cfa097411cc.js",
-      "static/chunks/main-app-956433cae3ee42dd.js",
-      "static/css/1764d352751b87cc.css",
-      "static/chunks/bc9e92e6-388cbe5f29e2a43b.js",
-      "static/chunks/5650b5f8-6b8e56b4a7bbd0b0.js",
-      "static/chunks/634-215ddf3c943efc05.js",
-      "static/chunks/app/layout-de448081487573bc.js"
-    ],
-    "/page": [
-      "static/chunks/webpack-e2aa441a245b0fdf.js",
-      "static/chunks/fd9d1056-796f5f0836d7e441.js",
-      "static/chunks/117-adbb5cfa097411cc.js",
-      "static/chunks/main-app-956433cae3ee42dd.js",
-      "static/chunks/bc9e92e6-388cbe5f29e2a43b.js",
-      "static/chunks/5650b5f8-6b8e56b4a7bbd0b0.js",
-      "static/chunks/634-215ddf3c943efc05.js",
-      "static/chunks/758-6ce80c47818cd280.js",
-      "static/chunks/app/page-8b4fcb67d0b6a8e0.js"
-    ],
-    "/login/page": [
-      "static/chunks/webpack-e2aa441a245b0fdf.js",
-      "static/chunks/fd9d1056-796f5f0836d7e441.js",
-      "static/chunks/117-adbb5cfa097411cc.js",
-      "static/chunks/main-app-956433cae3ee42dd.js",
-      "static/chunks/bc9e92e6-388cbe5f29e2a43b.js",
-      "static/chunks/5650b5f8-6b8e56b4a7bbd0b0.js",
-      "static/chunks/634-215ddf3c943efc05.js",
-      "static/chunks/470-3eeff2b7e6e88ad7.js",
-      "static/chunks/app/login/page-6a6de210c8be8aad.js"
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/css/app/layout.css",
+      "static/chunks/app/layout.js"
     ]
   }
 }

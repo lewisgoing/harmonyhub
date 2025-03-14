@@ -3,10 +3,15 @@ import { DEFAULT_FREQUENCY_BANDS } from './constants';
 
 /**
  * AudioEngine class handles all interactions with the Web Audio API
+ * with improved memory management and performance optimizations
  */
 export class AudioEngine {
   private debounceTimers: Record<string, number> = {};
   private audioElement: HTMLAudioElement | null = null;
+  
+  // Track node creation to prevent redundancy
+  private isInitialized = false;
+  private nodesInitialized = false;
   
   // Add cache properties
   private cacheInvalidated = true;
@@ -28,7 +33,6 @@ export class AudioEngine {
     rightGain: null
   };
   
-  private initialized = false;
   private eqEnabled = true;
   private leftEarEnabled = true;
   private rightEarEnabled = true;
@@ -41,6 +45,10 @@ export class AudioEngine {
   private unifiedBands: FrequencyBand[] = [...DEFAULT_FREQUENCY_BANDS];
   private leftEarBands: FrequencyBand[] = [...DEFAULT_FREQUENCY_BANDS];
   private rightEarBands: FrequencyBand[] = [...DEFAULT_FREQUENCY_BANDS];
+
+  // Track route rebuilding status
+  private isRebuildingRoute = false;
+  private pendingStateChanges: Array<() => void> = [];
 
   constructor(audioElement: HTMLAudioElement) {
     this.audioElement = audioElement;
@@ -65,7 +73,7 @@ export class AudioEngine {
    */
   public async initialize(): Promise<boolean> {
     try {
-      if (this.initialized) {
+      if (this.isInitialized) {
         await this.cleanupContext();
       }
 
@@ -94,7 +102,8 @@ export class AudioEngine {
       // Basic setup - just connect source to destination initially
       this.nodes.source.connect(ctx.destination);
       
-      this.initialized = true;
+      this.isInitialized = true;
+      this.nodesInitialized = false;
       console.log("Audio context initialized successfully");
       
       // Set up initial audio routing
@@ -150,7 +159,8 @@ export class AudioEngine {
     this.cacheInvalidated = true;
     
     // Check if audio context is ready
-    if (!this.nodes.context || this.nodes.context.state === 'suspended') {
+    if (!this.nodes.context || 
+        this.nodes.context.state === 'suspended') {
       console.log("Audio context not ready, attempting to resume");
       
       // Try to resume context if suspended
@@ -200,31 +210,18 @@ export class AudioEngine {
   private async cleanupContext(): Promise<void> {
     if (this.nodes.context) {
       try {
-        // Disconnect source if it exists
-        if (this.nodes.source) {
-          try {
-            this.nodes.source.disconnect();
-          } catch (e) {
-            console.warn("Error disconnecting source:", e);
-          }
-        }
+        // Disconnect all nodes in a controlled manner
+        this.disconnectAllNodes();
         
         // Close the context
         await this.nodes.context.close();
         console.log("Audio context closed");
         
         // Reset node references
-        this.nodes = {
-          context: null,
-          source: null,
-          filters: [],
-          leftFilters: [],
-          rightFilters: [],
-          splitter: null,
-          merger: null,
-          leftGain: null,
-          rightGain: null
-        };
+        this.resetNodeReferences();
+        
+        this.isInitialized = false;
+        this.nodesInitialized = false;
       } catch (e) {
         console.error("Error closing audio context:", e);
       }
@@ -232,15 +229,88 @@ export class AudioEngine {
   }
 
   /**
+   * Disconnect all audio nodes safely
+   */
+  private disconnectAllNodes(): void {
+    try {
+      // Disconnect source if it exists
+      if (this.nodes.source) {
+        try {
+          this.nodes.source.disconnect();
+        } catch (e) {
+          console.warn("Error disconnecting source:", e);
+        }
+      }
+      
+      // Disconnect all filter nodes
+      const disconnectFilters = (filters: BiquadFilterNode[]) => {
+        filters.forEach(filter => {
+          try {
+            filter.disconnect();
+          } catch (e) {
+            // Ignore disconnection errors
+          }
+        });
+      };
+      
+      disconnectFilters(this.nodes.filters);
+      disconnectFilters(this.nodes.leftFilters);
+      disconnectFilters(this.nodes.rightFilters);
+      
+      // Disconnect channel nodes
+      [this.nodes.splitter, this.nodes.merger, this.nodes.leftGain, this.nodes.rightGain].forEach(node => {
+        if (node) {
+          try {
+            node.disconnect();
+          } catch (e) {
+            // Ignore disconnection errors
+          }
+        }
+      });
+    } catch (e) {
+      console.warn("Error during node disconnection:", e);
+    }
+  }
+
+  /**
+   * Reset all node references
+   */
+  private resetNodeReferences(): void {
+    this.nodes = {
+      context: null,
+      source: null,
+      filters: [],
+      leftFilters: [],
+      rightFilters: [],
+      splitter: null,
+      merger: null,
+      leftGain: null,
+      rightGain: null
+    };
+  }
+
+  /**
    * Update audio routing based on current settings
    */
   public async updateAudioRouting(): Promise<boolean> {
+    // If already rebuilding, queue this request
+    if (this.isRebuildingRoute) {
+      return new Promise((resolve) => {
+        this.pendingStateChanges.push(() => {
+          resolve(true);
+        });
+      });
+    }
+    
+    this.isRebuildingRoute = true;
+    
     try {
       // First ensure audio context is ready
       await this.ensureAudioContextReady();
       
       if (!this.nodes.context || !this.nodes.source) {
         console.log("Cannot update audio routing - missing context or source");
+        this.isRebuildingRoute = false;
         return false;
       }
       
@@ -248,6 +318,8 @@ export class AudioEngine {
       const mediaSource = this.nodes.source;
   
       const needsRebuild = (
+        // If this is our first run
+        !this.nodesInitialized ||
         // If we're switching modes, we need to rebuild
         (this.splitEarMode && this.nodes.filters.length > 0 && this.nodes.leftFilters.length === 0) ||
         (!this.splitEarMode && this.nodes.leftFilters.length > 0 && this.nodes.filters.length === 0) ||
@@ -257,127 +329,18 @@ export class AudioEngine {
   
       if (needsRebuild) {
         // Full rebuild needed - disconnect everything
-        try {
-          mediaSource.disconnect();
-        } catch (e) {
-          console.warn("Error disconnecting source:", e);
-        }
+        this.disconnectAllNodes();
         
         console.log("Rebuilding audio routing", 
                     "Mode:", this.splitEarMode ? "split" : "unified");
-  
-        this.nodes.filters = [];
-        this.nodes.leftFilters = [];
-        this.nodes.rightFilters = [];
-        this.nodes.splitter = null;
-        this.nodes.merger = null;
-        this.nodes.leftGain = null;
-        this.nodes.rightGain = null;
-      
+        
         if (this.splitEarMode) {
-          // SPLIT EAR MODE SETUP - Important: Create nodes in consistent order
-          console.log("Setting up split ear mode");
-          
-          // 1. Create all nodes first before connecting
-          const splitter = context.createChannelSplitter(2);
-          const merger = context.createChannelMerger(2);
-          const leftGain = context.createGain();
-          const rightGain = context.createGain();
-          
-          // 2. Create filter chains with consistent parameters
-          const leftFilters = this.createFiltersFromBands(context, this.leftEarBands);
-          const rightFilters = this.createFiltersFromBands(context, this.rightEarBands);
-          
-          // 3. Store references to all nodes
-          this.nodes.splitter = splitter;
-          this.nodes.merger = merger;
-          this.nodes.leftGain = leftGain;
-          this.nodes.rightGain = rightGain;
-          this.nodes.leftFilters = leftFilters;
-          this.nodes.rightFilters = rightFilters;
-          
-          // 4. Apply gain and balance
-          this.applyBalance();
-          
-          // 5. Connect nodes in clear sequence
-          // Source → Splitter
-          mediaSource.connect(splitter);
-          
-          // Left channel: Splitter → Filters → Gain → Merger
-          splitter.connect(leftFilters[0], 0); // Connect first filter to left channel
-          for (let i = 0; i < leftFilters.length - 1; i++) {
-            leftFilters[i].connect(leftFilters[i + 1]);
-          }
-          leftFilters[leftFilters.length - 1].connect(leftGain);
-          leftGain.connect(merger, 0, 0);
-          
-          // Right channel: Splitter → Filters → Gain → Merger
-          splitter.connect(rightFilters[0], 1); // Connect first filter to right channel
-          for (let i = 0; i < rightFilters.length - 1; i++) {
-            rightFilters[i].connect(rightFilters[i + 1]);
-          }
-          rightFilters[rightFilters.length - 1].connect(rightGain);
-          rightGain.connect(merger, 0, 1);
-          
-          // Merger → Destination
-          merger.connect(context.destination);
-          
-          // 6. Apply EQ settings after all connections are made
-          this.applyEQSettings();
-          
-          console.log("Split ear mode setup complete");
+          await this.setupSplitEarMode(context, mediaSource);
         } else {
-          // UNIFIED MODE SETUP
-          console.log("Setting up unified mode");
-          
-          // 1. Create all nodes first before connecting
-          const filters = this.createFiltersFromBands(context, this.unifiedBands);
-          const splitter = context.createChannelSplitter(2);
-          const merger = context.createChannelMerger(2);
-          const leftGain = context.createGain();
-          const rightGain = context.createGain();
-          
-          // 2. Store references to all nodes
-          this.nodes.filters = filters;
-          this.nodes.splitter = splitter;
-          this.nodes.merger = merger;
-          this.nodes.leftGain = leftGain;
-          this.nodes.rightGain = rightGain;
-          
-          // 3. Apply gain and balance
-          this.applyBalance();
-          
-          // 4. Connect nodes in clear sequence
-          if (this.eqEnabled) {
-            // Source → Filters → Splitter → Gains → Merger → Destination
-            mediaSource.connect(filters[0]);
-            
-            // Connect filters in sequence
-            for (let i = 0; i < filters.length - 1; i++) {
-              filters[i].connect(filters[i + 1]);
-            }
-            
-            // Last filter → Splitter
-            filters[filters.length - 1].connect(splitter);
-          } else {
-            // Skip filters if EQ is disabled: Source → Splitter → Gains → Merger → Destination
-            mediaSource.connect(splitter);
-          }
-          
-          // Splitter → Gains → Merger
-          splitter.connect(leftGain, 0);
-          splitter.connect(rightGain, 1);
-          leftGain.connect(merger, 0, 0);
-          rightGain.connect(merger, 0, 1);
-          
-          // Merger → Destination
-          merger.connect(context.destination);
-          
-          // 5. Apply EQ settings after all connections are made
-          this.applyEQSettings();
-          
-          console.log("Unified mode setup complete");
+          await this.setupUnifiedMode(context, mediaSource);
         }
+        
+        this.nodesInitialized = true;
       } else {
         console.log("Updating audio parameters without rebuilding graph");
       
@@ -394,6 +357,11 @@ export class AudioEngine {
       // Add debug output to help diagnose remaining issues
       this.debugFilterSettings();
       
+      this.isRebuildingRoute = false;
+      
+      // Process any pending state changes
+      this.processPendingStateChanges();
+      
       return true;
     } catch (error) {
       console.error("Error in updateAudioRouting:", error);
@@ -401,7 +369,7 @@ export class AudioEngine {
       // Fallback: direct connection if routing fails
       try {
         if (this.nodes.source && this.nodes.context) {
-          this.nodes.source.disconnect();
+          this.disconnectAllNodes();
           this.nodes.source.connect(this.nodes.context.destination);
           console.log("Fallback connection established");
         }
@@ -409,8 +377,134 @@ export class AudioEngine {
         console.error("Fallback connection failed:", e);
       }
       
+      this.isRebuildingRoute = false;
       return false;
     }
+  }
+
+  /**
+   * Process any pending state changes
+   */
+  private processPendingStateChanges(): void {
+    // Execute all pending callbacks
+    while (this.pendingStateChanges.length > 0) {
+      const callback = this.pendingStateChanges.shift();
+      if (callback) callback();
+    }
+  }
+
+  /**
+   * Setup split ear mode audio routing
+   */
+  private async setupSplitEarMode(context: AudioContext, mediaSource: MediaElementAudioSourceNode): Promise<void> {
+    console.log("Setting up split ear mode");
+    
+    // 1. Create all nodes first before connecting
+    const splitter = context.createChannelSplitter(2);
+    const merger = context.createChannelMerger(2);
+    const leftGain = context.createGain();
+    const rightGain = context.createGain();
+    
+    // 2. Create filter chains with consistent parameters
+    const leftFilters = this.createFiltersFromBands(context, this.leftEarBands);
+    const rightFilters = this.createFiltersFromBands(context, this.rightEarBands);
+    
+    // 3. Store references to all nodes
+    this.nodes.splitter = splitter;
+    this.nodes.merger = merger;
+    this.nodes.leftGain = leftGain;
+    this.nodes.rightGain = rightGain;
+    this.nodes.leftFilters = leftFilters;
+    this.nodes.rightFilters = rightFilters;
+    this.nodes.filters = []; // Clear unified filters
+    
+    // 4. Apply gain and balance
+    this.applyBalance();
+    
+    // 5. Connect nodes in clear sequence
+    // Source → Splitter
+    mediaSource.connect(splitter);
+    
+    // Left channel: Splitter → Filters → Gain → Merger
+    splitter.connect(leftFilters[0], 0); // Connect first filter to left channel
+    for (let i = 0; i < leftFilters.length - 1; i++) {
+      leftFilters[i].connect(leftFilters[i + 1]);
+    }
+    leftFilters[leftFilters.length - 1].connect(leftGain);
+    leftGain.connect(merger, 0, 0);
+    
+    // Right channel: Splitter → Filters → Gain → Merger
+    splitter.connect(rightFilters[0], 1); // Connect first filter to right channel
+    for (let i = 0; i < rightFilters.length - 1; i++) {
+      rightFilters[i].connect(rightFilters[i + 1]);
+    }
+    rightFilters[rightFilters.length - 1].connect(rightGain);
+    rightGain.connect(merger, 0, 1);
+    
+    // Merger → Destination
+    merger.connect(context.destination);
+    
+    // 6. Apply EQ settings after all connections are made
+    this.applyEQSettings();
+    
+    console.log("Split ear mode setup complete");
+  }
+
+  /**
+   * Setup unified mode audio routing
+   */
+  private async setupUnifiedMode(context: AudioContext, mediaSource: MediaElementAudioSourceNode): Promise<void> {
+    console.log("Setting up unified mode");
+    
+    // 1. Create all nodes first before connecting
+    const filters = this.createFiltersFromBands(context, this.unifiedBands);
+    const splitter = context.createChannelSplitter(2);
+    const merger = context.createChannelMerger(2);
+    const leftGain = context.createGain();
+    const rightGain = context.createGain();
+    
+    // 2. Store references to all nodes
+    this.nodes.filters = filters;
+    this.nodes.splitter = splitter;
+    this.nodes.merger = merger;
+    this.nodes.leftGain = leftGain;
+    this.nodes.rightGain = rightGain;
+    this.nodes.leftFilters = []; // Clear split mode filters
+    this.nodes.rightFilters = [];
+    
+    // 3. Apply gain and balance
+    this.applyBalance();
+    
+    // 4. Connect nodes in clear sequence
+    if (this.eqEnabled) {
+      // Source → Filters → Splitter → Gains → Merger → Destination
+      mediaSource.connect(filters[0]);
+      
+      // Connect filters in sequence
+      for (let i = 0; i < filters.length - 1; i++) {
+        filters[i].connect(filters[i + 1]);
+      }
+      
+      // Last filter → Splitter
+      filters[filters.length - 1].connect(splitter);
+    } else {
+      // Skip filters if EQ is disabled: Source → Splitter → Gains → Merger → Destination
+      mediaSource.connect(splitter);
+    }
+    
+    // Splitter → Gains → Merger
+    splitter.connect(leftGain, 0);
+    splitter.connect(rightGain, 1);
+    leftGain.connect(merger, 0, 0);
+    rightGain.connect(merger, 0, 1);
+    
+    // Merger → Destination
+    merger.connect(context.destination);
+    
+    // 5. Apply EQ settings after all connections are made
+    this.applyEQSettings();
+    
+    console.log("Unified mode setup complete");
   }
 
   /**
@@ -430,6 +524,7 @@ export class AudioEngine {
       return filter;
     });
   }
+
   /**
    * Apply balance setting to gain nodes
    */
@@ -487,53 +582,51 @@ export class AudioEngine {
   }
 
   /**
-   * Apply band settings to filter nodes
+   * Apply band settings to filter nodes with improved performance
    */
-// Update the applyBandsToFilters method in AudioEngine.ts
-// Fix: Ensure consistent Q value handling between modes
-private applyBandsToFilters(
-  bands: FrequencyBand[], 
-  filters: BiquadFilterNode[],
-  enabled: boolean
-): void {
-  // Get current time from audio context for scheduling parameter changes
-  const currentTime = this.nodes.context?.currentTime || 0;
-  // Set a short ramp time for smoother transitions (50ms)
-  const rampTime = 0.05; 
+  private applyBandsToFilters(
+    bands: FrequencyBand[], 
+    filters: BiquadFilterNode[],
+    enabled: boolean
+  ): void {
+    // Get current time from audio context for scheduling parameter changes
+    const currentTime = this.nodes.context?.currentTime || 0;
+    // Set a short ramp time for smoother transitions (50ms)
+    const rampTime = 0.05; 
 
-  bands.forEach((band, index) => {
-    if (index < filters.length) {
-      const filter = filters[index];
-      
-      // Apply gain change with a smooth ramp
-      const targetGain = enabled ? band.gain : 0;
-      filter.gain.cancelScheduledValues(currentTime);
-      filter.gain.setValueAtTime(filter.gain.value, currentTime);
-      filter.gain.linearRampToValueAtTime(targetGain, currentTime + rampTime);
-      
-      // Apply frequency change with a smooth ramp
-      filter.frequency.cancelScheduledValues(currentTime);
-      filter.frequency.setValueAtTime(filter.frequency.value, currentTime);
-      filter.frequency.exponentialRampToValueAtTime(
-        Math.max(20, band.frequency), // Ensure frequency isn't too low for exponential ramp
-        currentTime + rampTime
-      );
-      
-      // Improved handling of Q value - especially important for wide notches
-      // For wide notches (low Q values), ensure we respect the user's choice
-      const scaledQ = band.Q; // Use the value directly, don't scale
-      filter.Q.cancelScheduledValues(currentTime);
-      filter.Q.setValueAtTime(filter.Q.value, currentTime);
-      filter.Q.linearRampToValueAtTime(scaledQ, currentTime + rampTime);
-      
-      console.log(`Applied filter ${index}:`, {
-        freq: band.frequency,
-        gain: targetGain,
-        Q: scaledQ
-      });
-    }
-  });
-}
+    bands.forEach((band, index) => {
+      if (index < filters.length) {
+        const filter = filters[index];
+        
+        // Apply gain change with a smooth ramp
+        const targetGain = enabled ? band.gain : 0;
+        
+        // Only update if the gain has actually changed
+        if (Math.abs(filter.gain.value - targetGain) > 0.01) {
+          filter.gain.cancelScheduledValues(currentTime);
+          filter.gain.setValueAtTime(filter.gain.value, currentTime);
+          filter.gain.linearRampToValueAtTime(targetGain, currentTime + rampTime);
+        }
+        
+        // Only update frequency if it's changed
+        if (Math.abs(filter.frequency.value - band.frequency) > 0.1) {
+          filter.frequency.cancelScheduledValues(currentTime);
+          filter.frequency.setValueAtTime(filter.frequency.value, currentTime);
+          filter.frequency.exponentialRampToValueAtTime(
+            Math.max(20, band.frequency), // Ensure frequency isn't too low for exponential ramp
+            currentTime + rampTime
+          );
+        }
+        
+        // Only update Q if it's changed
+        if (Math.abs(filter.Q.value - band.Q) > 0.01) {
+          filter.Q.cancelScheduledValues(currentTime);
+          filter.Q.setValueAtTime(filter.Q.value, currentTime);
+          filter.Q.linearRampToValueAtTime(band.Q, currentTime + rampTime);
+        }
+      }
+    });
+  }
 
   /**
    * Approximate frequency response from bands when WebAudio API is not available
@@ -571,6 +664,8 @@ private applyBandsToFilters(
    * Set whether EQ is enabled
    */
   public setEQEnabled(enabled: boolean): void {
+    if (this.eqEnabled === enabled) return; // Skip if no change
+    
     this.eqEnabled = enabled;
     this.applyEQSettings();
     
@@ -647,46 +742,45 @@ private applyBandsToFilters(
     }
   }
 
-
   /**
- * Debug current filter settings to help diagnose issues
- */
-public debugFilterSettings(): void {
-  console.log("%c === FILTER SETTINGS DEBUG ===", "color: blue; font-weight: bold");
-  console.log("Mode:", this.splitEarMode ? "Split Ear" : "Unified");
-  
-  if (this.splitEarMode) {
-    console.log("%c Left Ear Filters:", "color: blue");
-    this.nodes.leftFilters.forEach((filter, i) => {
-      console.log(`Filter ${i}:`, {
-        frequency: filter.frequency.value.toFixed(1),
-        gain: filter.gain.value.toFixed(1),
-        Q: filter.Q.value.toFixed(2),
-        type: filter.type
-      });
-    });
+   * Debug current filter settings to help diagnose issues
+   */
+  public debugFilterSettings(): void {
+    console.log("%c === FILTER SETTINGS DEBUG ===", "color: blue; font-weight: bold");
+    console.log("Mode:", this.splitEarMode ? "Split Ear" : "Unified");
     
-    console.log("%c Right Ear Filters:", "color: red");
-    this.nodes.rightFilters.forEach((filter, i) => {
-      console.log(`Filter ${i}:`, {
-        frequency: filter.frequency.value.toFixed(1),
-        gain: filter.gain.value.toFixed(1),
-        Q: filter.Q.value.toFixed(2),
-        type: filter.type
+    if (this.splitEarMode) {
+      console.log("%c Left Ear Filters:", "color: blue");
+      this.nodes.leftFilters.forEach((filter, i) => {
+        console.log(`Filter ${i}:`, {
+          frequency: filter.frequency.value.toFixed(1),
+          gain: filter.gain.value.toFixed(1),
+          Q: filter.Q.value.toFixed(2),
+          type: filter.type
+        });
       });
-    });
-  } else {
-    console.log("%c Unified Filters:", "color: orange");
-    this.nodes.filters.forEach((filter, i) => {
-      console.log(`Filter ${i}:`, {
-        frequency: filter.frequency.value.toFixed(1),
-        gain: filter.gain.value.toFixed(1),
-        Q: filter.Q.value.toFixed(2),
-        type: filter.type
+      
+      console.log("%c Right Ear Filters:", "color: red");
+      this.nodes.rightFilters.forEach((filter, i) => {
+        console.log(`Filter ${i}:`, {
+          frequency: filter.frequency.value.toFixed(1),
+          gain: filter.gain.value.toFixed(1),
+          Q: filter.Q.value.toFixed(2),
+          type: filter.type
+        });
       });
-    });
+    } else {
+      console.log("%c Unified Filters:", "color: orange");
+      this.nodes.filters.forEach((filter, i) => {
+        console.log(`Filter ${i}:`, {
+          frequency: filter.frequency.value.toFixed(1),
+          gain: filter.gain.value.toFixed(1),
+          Q: filter.Q.value.toFixed(2),
+          type: filter.type
+        });
+      });
+    }
   }
-}
 
   /**
    * Set individual ear enabled states
@@ -786,14 +880,6 @@ public debugFilterSettings(): void {
     this.cacheInvalidated = true;
   }
 
-  private needsBackgroundUpdate = false;
-
-// Add this method to support background calculations
-private calculateBackgroundFrequencyResponse(): void {
-  // Perform intensive calculations during idle time
-  // This improves UI responsiveness
-  this.needsBackgroundUpdate = false;
-}
   /**
    * Apply a preset to right ear
    */
@@ -830,7 +916,14 @@ private calculateBackgroundFrequencyResponse(): void {
   }
 
   /**
-   * Get current frequency response data for visualization
+   * Check if the audio engine is initialized
+   */
+  public isEngineInitialized(): boolean {
+    return this.isInitialized && this.nodesInitialized;
+  }
+
+  /**
+   * Get current frequency response data for visualization with memoization
    */
   public getFrequencyResponse(numPoints = 200): {
     frequencies: Float32Array, 
@@ -842,7 +935,6 @@ private calculateBackgroundFrequencyResponse(): void {
         this.lastResponseCache.frequencies.length === numPoints) {
       return this.lastResponseCache;
     }
-    
     
     const frequencies = new Float32Array(numPoints);
     const leftMagnitudes = new Float32Array(numPoints);
@@ -857,7 +949,7 @@ private calculateBackgroundFrequencyResponse(): void {
     leftMagnitudes.fill(0);
     rightMagnitudes.fill(0);
     
-    // If the audio context isn't fully initialized yet, return smooth approximated curves
+    // If the audio context isn't fully initialized yet, return approximated curves
     if (!this.nodes.context || 
         !this.nodes.filters.length || 
         (this.splitEarMode && 
@@ -878,16 +970,6 @@ private calculateBackgroundFrequencyResponse(): void {
       // Cache this response
       this.lastResponseCache = { frequencies, leftMagnitudes, rightMagnitudes };
       this.cacheInvalidated = false;
-      
-      // Use requestIdleCallback if available to smooth out UI
-      if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-        (window as any).requestIdleCallback(() => {
-          // Recalculate in background if needed
-          if (this.needsBackgroundUpdate) {
-            this.calculateBackgroundFrequencyResponse();
-          }
-        });
-      }
       
       return { frequencies, leftMagnitudes, rightMagnitudes };
     }

@@ -1,6 +1,4 @@
-"use client";
-
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { FrequencyBand } from './types';
 import { Slider } from '@/components/ui/slider';
 import { Button } from '@/components/ui/button';
@@ -11,7 +9,6 @@ interface EQVisualizationProps {
   isEQEnabled: boolean;
   maxQValue?: 10 | 20 | 30;
   isSplitEarMode: boolean;
-
   leftEarEnabled?: boolean;  
   rightEarEnabled?: boolean;
   
@@ -30,7 +27,7 @@ interface EQVisualizationProps {
   // Callbacks for interactive adjustments
   onBandChange: (
     bandId: string, 
-    newGain?: number, // Make newGain optional
+    newGain?: number,
     newQ?: number, 
     channel?: 'unified' | 'left' | 'right'
   ) => void;
@@ -68,7 +65,7 @@ const RIGHT_EAR_COLOR = '#ef4444'; // Red
 const DISABLED_OPACITY = 0.4;
 const GRID_COLOR = '#e9ecef';
 const ZERO_LINE_COLOR = '#ced4da';
-const FREQUENCY_LABELS = ['          60Hz', '250Hz', '1kHz', '2kHz', '4kHz', '8kHz', '12kHz', '16kHz           '];
+const FREQUENCY_LABELS = ['60Hz', '250Hz', '1kHz', '2kHz', '4kHz', '8kHz', '12kHz', '16kHz'];
 const FREQUENCY_POSITIONS = [60, 250, 1000, 2000, 4000, 8000, 12000, 16000];
 const DB_RANGE = 48; // +/- 24dB
 
@@ -165,6 +162,21 @@ const roundFrequency = (freq: number): number => {
   return Math.round(freq / 500) * 500;
 };
 
+// Throttle function to limit the rate of function calls
+const throttle = <F extends (...args: any[]) => any>(func: F, limit: number): F => {
+  let lastCall = 0;
+  return ((...args: Parameters<F>) => {
+    const now = Date.now();
+    if (now - lastCall >= limit) {
+      lastCall = now;
+      return func(...args);
+    }
+  }) as F;
+};
+
+// Use a placeholder image while loading to prevent white flash
+const PLACEHOLDER_IMAGE = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='200' viewBox='0 0 400 200'%3E%3Crect width='400' height='200' fill='%23f8f9fa'/%3E%3Ctext x='200' y='100' font-family='system-ui, sans-serif' font-size='14' text-anchor='middle' fill='%236c757d'%3ELoading EQ visualization...%3C/text%3E%3C/svg%3E`;
+
 /**
  * EQ Visualization Component
  */
@@ -174,8 +186,8 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
   unifiedBands,
   leftEarBands,
   rightEarBands,
-  leftEarEnabled = true,  // Add default value
-  rightEarEnabled = true, // Add default value
+  leftEarEnabled = true,
+  rightEarEnabled = true,
   frequencyResponseData,
   onBandChange,
   onFrequencyChange,
@@ -191,8 +203,14 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
   allowXDragging = true,
   allowYDragging = true
 }) => {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  // PERFORMANCE OPTIMIZATION: Use multiple canvas layers
+  const backgroundCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const curveCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const controlsCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  
+  // Track canvas dimensions and pixel ratio for high-DPI rendering
+  const [canvasDimensions, setCanvasDimensions] = useState({ width: 0, height: 0, pixelRatio: 1 });
   
   // Track the currently dragged point
   const [draggedPoint, setDraggedPoint] = useState<{
@@ -222,152 +240,174 @@ const EQVisualization: React.FC<EQVisualizationProps> = ({
   
   // Add a state to track the last click time for double-click detection
   const [lastClickTime, setLastClickTime] = useState(0);
-
   
+  // Track if the component is mounted and ready
+  const [isMounted, setIsMounted] = useState(false);
+  
+  // PERFORMANCE IMPROVEMENT: Track if we need to redraw the curve layer
+  const [needsCurveRedraw, setNeedsCurveRedraw] = useState(true);
+  
+  // Animation frame IDs to properly cancel animations
+  const animationFrameRef = useRef<number | null>(null);
+  
+  // Add a ref to store the last render timestamp for throttling
+  const lastRenderTimeRef = useRef(0);
 
-  // Redraw when props change
-  useEffect(() => {
-    drawEQCurve();
-  }, [
-    isEQEnabled, 
-    isSplitEarMode, 
-    unifiedBands, 
-    leftEarBands, 
-    rightEarBands,
-    frequencyResponseData,
-    height
-  ]);
-
-  useEffect(() => {
-    if (!canvasRef.current) return;
-    
-    if (hoveredPoint) {
-      // Check if the hovered point is on a disabled ear
-      if ((hoveredPoint.channel === 'left' && !leftEarEnabled) || 
-          (hoveredPoint.channel === 'right' && !rightEarEnabled)) {
-        canvasRef.current.style.cursor = "not-allowed";
-      } else {
-        canvasRef.current.style.cursor = "pointer";
-      }
+  // PERFORMANCE IMPROVEMENT: Memoize the current bands to avoid unnecessary rerenders
+  const currentBands = useMemo(() => {
+    if (isSplitEarMode) {
+      return {
+        leftEar: leftEarBands,
+        rightEar: rightEarBands
+      };
     } else {
-      canvasRef.current.style.cursor = "default";
+      return {
+        unified: unifiedBands
+      };
     }
-  }, [hoveredPoint, leftEarEnabled, rightEarEnabled]);
-  
-  // Resize canvas when container size changes
+  }, [isSplitEarMode, leftEarBands, rightEarBands, unifiedBands]);
+
+  // PERFORMANCE OPTIMIZATION: Setup canvas once on mount
   useEffect(() => {
-    const resizeObserver = new ResizeObserver(() => {
-      resizeCanvas();
-    });
+    // Set mounted flag
+    setIsMounted(true);
     
     if (containerRef.current) {
+      const resizeObserver = new ResizeObserver(() => {
+        resizeCanvases();
+      });
+      
       resizeObserver.observe(containerRef.current);
+      
+      // Initial render - force an immediate resize and draw
+      resizeCanvases();
+      
+      // Immediate render to prevent white flash
+      const initialDraw = () => {
+        // If dimensions aren't set yet, use container size
+        if (canvasDimensions.width === 0 && containerRef.current) {
+          const rect = containerRef.current.getBoundingClientRect();
+          const pixelRatio = window.devicePixelRatio || 1;
+          const initialDims = {
+            width: Math.floor((rect.width - 8) * pixelRatio),
+            height: Math.floor((height - 8) * pixelRatio),
+            pixelRatio
+          };
+          
+          // Initialize canvases
+          [backgroundCanvasRef, curveCanvasRef, controlsCanvasRef].forEach(canvasRef => {
+            const canvas = canvasRef.current;
+            if (canvas) {
+              canvas.width = initialDims.width;
+              canvas.height = initialDims.height;
+              canvas.style.width = `${rect.width - 8}px`;
+              canvas.style.height = `${height - 8}px`;
+            }
+          });
+          
+          // Draw initial state
+          drawBackgroundLayer(initialDims);
+          drawCurveLayer(initialDims);
+          drawControlsLayer(initialDims);
+        }
+      };
+      
+      // Draw immediately to avoid white flash
+      initialDraw();
+      
+      return () => {
+        if (animationFrameRef.current !== null) {
+          cancelAnimationFrame(animationFrameRef.current);
+        }
+        resizeObserver.disconnect();
+        setIsMounted(false);
+      };
     }
-    
-    // Initial resize
-    resizeCanvas();
-    
-    return () => {
-      resizeObserver.disconnect();
-    };
   }, []);
 
-  /**
-   * Resize canvas to fit container
-   */
-  const resizeCanvas = () => {
-    if (canvasRef.current && containerRef.current) {
-      const rect = containerRef.current.getBoundingClientRect();
-      const padding = 4; // Account for padding in container
-      
-      // Set canvas size to fit within the container
-      canvasRef.current.width = rect.width - padding * 2 - 10;
-      
-      // Calculate height based on screen size (taller on desktop)
-      const computedHeight = window.innerWidth >= 768 ? 
-        Math.min(Math.max(height, rect.width * 0.4), 280) : // Desktop: min height 160px, max 280px
-        height; // Mobile: use the provided height
-      
-      canvasRef.current.height = computedHeight - padding * 2;
-      
-      // Redraw after resize
-      drawEQCurve();
+  // Resize canvas with high-DPI support
+  const resizeCanvases = useCallback(() => {
+    if (!containerRef.current || 
+        !backgroundCanvasRef.current || 
+        !curveCanvasRef.current || 
+        !controlsCanvasRef.current) {
+      return;
     }
-  };
+    
+    const rect = containerRef.current.getBoundingClientRect();
+    const padding = 4; // Account for padding in container
+    const displayWidth = rect.width - padding * 2;
+    const displayHeight = height - padding * 2;
+    
+    // Get the device pixel ratio for high-DPI rendering
+    const pixelRatio = window.devicePixelRatio || 1;
+    
+    // Canvas dimensions in actual pixels
+    const canvasWidth = Math.floor(displayWidth * pixelRatio);
+    const canvasHeight = Math.floor(displayHeight * pixelRatio);
+    
+    // Update canvas sizes for all layers
+    [backgroundCanvasRef, curveCanvasRef, controlsCanvasRef].forEach(canvasRef => {
+      const canvas = canvasRef.current;
+      if (canvas) {
+        // Set canvas dimensions in pixels
+        canvas.width = canvasWidth;
+        canvas.height = canvasHeight;
+        
+        // Set display size in CSS pixels
+        canvas.style.width = `${displayWidth}px`;
+        canvas.style.height = `${displayHeight}px`;
+      }
+    });
+    
+    // Update our state with new dimensions
+    const newDimensions = {
+      width: canvasWidth,
+      height: canvasHeight,
+      pixelRatio: pixelRatio
+    };
+    
+    setCanvasDimensions(newDimensions);
+    
+    // Force a redraw of all layers with new dimensions
+    setNeedsCurveRedraw(true);
+    
+    // Cancel any existing animation frame
+    if (animationFrameRef.current !== null) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+    
+    // Schedule immediate redraw
+    animationFrameRef.current = requestAnimationFrame(() => {
+      drawBackgroundLayer(newDimensions);
+      drawCurveLayer(newDimensions);
+      drawControlsLayer(newDimensions);
+    });
+  }, [height]);
 
-  
-
-  /**
-   * Draw the EQ curve on the canvas
-   */
-const drawEQCurve = useCallback(() => {
-  if (!canvasRef.current) return;
-  
-  const canvas = canvasRef.current;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
-  
-  const { width, height } = canvas;
-  
-  // Use requestAnimationFrame for smoother rendering
-  requestAnimationFrame(() => {
+  // PERFORMANCE OPTIMIZATION: Separate static background layer
+  const drawBackgroundLayer = useCallback((dims = canvasDimensions) => {
+    if (!backgroundCanvasRef.current || dims.width === 0) return;
+    
+    const canvas = backgroundCanvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    const { width, height, pixelRatio } = dims;
+    
     // Clear canvas
     ctx.clearRect(0, 0, width, height);
     
+    // Scale all drawing operations by the device pixel ratio
+    ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+    
     // Draw background
     ctx.fillStyle = '#f8f9fa';
-    ctx.fillRect(0, 0, width, height);
+    ctx.fillRect(0, 0, width / pixelRatio, height / pixelRatio);
     
     // Draw grid
-    drawGrid(ctx, width, height);
-    
-    // If frequency response data is available and valid, use it
-    if (frequencyResponseData && 
-        frequencyResponseData.frequencies.length > 0 && 
-        frequencyResponseData.leftMagnitudes.length > 0) {
-      drawFrequencyResponse(ctx, width, height);
-    } else {
-      // Otherwise use approximation
-      if (isSplitEarMode) {
-        drawBandCurve(ctx, leftEarBands, LEFT_EAR_COLOR, width, height, !leftEarEnabled);
-        drawBandCurve(ctx, rightEarBands, RIGHT_EAR_COLOR, width, height, !rightEarEnabled);
-      } else {
-        drawBandCurve(ctx, unifiedBands, UNIFIED_COLOR, width, height);
-      }
-    }
-    
-    // Add legend for split mode
-    if (isSplitEarMode) {
-      drawLegend(ctx, width, height);
-    }
-    
-    // Draw interactive points
-    if (interactive) {
-      drawBandPoints(ctx, width, height);
-    }
-  });
-}, [
-  frequencyResponseData, 
-  isSplitEarMode, 
-  leftEarBands, 
-  rightEarBands, 
-  unifiedBands, 
-  leftEarEnabled, 
-  rightEarEnabled, 
-  interactive
-]);
-
-
-  /**
-   * Draw the grid on the canvas
-   */
-  const drawGrid = (
-    ctx: CanvasRenderingContext2D,
-    width: number,
-    height: number
-  ) => {
     const gridLines = 8;
-    const gridSpacingV = height / gridLines;
+    const gridSpacingV = height / pixelRatio / gridLines;
     
     ctx.strokeStyle = GRID_COLOR;
     ctx.lineWidth = 1;
@@ -376,62 +416,61 @@ const drawEQCurve = useCallback(() => {
     for (let i = 0; i <= gridLines; i++) {
       ctx.beginPath();
       ctx.moveTo(0, i * gridSpacingV);
-      ctx.lineTo(width, i * gridSpacingV);
+      ctx.lineTo(width / pixelRatio, i * gridSpacingV);
       ctx.stroke();
     }
     
     // Vertical grid lines (logarithmic for frequencies)
     for (let freq of FREQUENCY_POSITIONS) {
-      const x = freqToX(freq, width);
+      const x = freqToX(freq, width / pixelRatio);
       ctx.beginPath();
       ctx.moveTo(x, 0);
-      ctx.lineTo(x, height);
+      ctx.lineTo(x, height / pixelRatio);
       ctx.stroke();
     }
-
+    
+    // Tinnitus frequency range highlight
     const tinnitusMinFreq = 3000; // 3kHz
-const tinnitusMaxFreq = 8000; // 8kHz
-
-// Draw a subtle highlight for the common tinnitus frequency range
-const xMin = freqToX(tinnitusMinFreq, width);
-const xMax = freqToX(tinnitusMaxFreq, width);
-
-// Draw a subtle background highlight
-ctx.fillStyle = 'rgba(255, 200, 200, 0.25)'; // Very light pink
-ctx.fillRect(xMin, 0, xMax - xMin, height);
-
-ctx.strokeStyle = 'rgba(220, 50, 50, 0.15)';
-ctx.lineWidth = 1;
-ctx.setLineDash([3, 3]); // Create a dashed line
-
-// Draw left vertical line
-ctx.beginPath();
-ctx.moveTo(xMin, 0);
-ctx.lineTo(xMin, height);
-ctx.stroke();
-
-// Draw right vertical line
-ctx.beginPath();
-ctx.moveTo(xMax, 0);
-ctx.lineTo(xMax, height);
-ctx.stroke();
-
-// Reset to solid line for other drawing operations
-ctx.setLineDash([]);
-
-
-// Add a small text label
-ctx.fillStyle = 'rgba(220, 50, 50, 0.8)';
-ctx.font = 'bold 10px system-ui';
-ctx.textAlign = 'center';
-ctx.fillText('Common Tinnitus Range (3-8kHz)', (xMin + xMax) / 2, height - 40);    
+    const tinnitusMaxFreq = 8000; // 8kHz
+    const xMin = freqToX(tinnitusMinFreq, width / pixelRatio);
+    const xMax = freqToX(tinnitusMaxFreq, width / pixelRatio);
+    
+    // Draw a subtle background highlight
+    ctx.fillStyle = 'rgba(255, 200, 200, 0.25)'; // Very light pink
+    ctx.fillRect(xMin, 0, xMax - xMin, height / pixelRatio);
+    
+    ctx.strokeStyle = 'rgba(220, 50, 50, 0.15)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]); // Create a dashed line
+    
+    // Draw left vertical line
+    ctx.beginPath();
+    ctx.moveTo(xMin, 0);
+    ctx.lineTo(xMin, height / pixelRatio);
+    ctx.stroke();
+    
+    // Draw right vertical line
+    ctx.beginPath();
+    ctx.moveTo(xMax, 0);
+    ctx.lineTo(xMax, height / pixelRatio);
+    ctx.stroke();
+    
+    // Reset to solid line for other drawing operations
+    ctx.setLineDash([]);
+    
+    // Add a small text label
+    ctx.fillStyle = 'rgba(220, 50, 50, 0.8)';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Common Tinnitus Range (3-8kHz)', (xMin + xMax) / 2, height / pixelRatio - 40);
+    
     // Draw zero line with a different color
     ctx.strokeStyle = ZERO_LINE_COLOR;
     ctx.lineWidth = 2;
-    const zeroDbY = height / 2;
+    const zeroDbY = (height / pixelRatio) / 2;
     ctx.beginPath();
     ctx.moveTo(0, zeroDbY);
-    ctx.lineTo(width, zeroDbY);
+    ctx.lineTo(width / pixelRatio, zeroDbY);
     ctx.stroke();
     
     // Add frequency labels
@@ -442,8 +481,8 @@ ctx.fillText('Common Tinnitus Range (3-8kHz)', (xMin + xMax) / 2, height - 40);
       
       FREQUENCY_LABELS.forEach((label, i) => {
         if (i < FREQUENCY_POSITIONS.length) {
-          const x = freqToX(FREQUENCY_POSITIONS[i], width);
-          ctx.fillText(label, x, height - 5);
+          const x = freqToX(FREQUENCY_POSITIONS[i], width / pixelRatio);
+          ctx.fillText(label, x, height / pixelRatio - 5);
         }
       });
     }
@@ -452,52 +491,156 @@ ctx.fillText('Common Tinnitus Range (3-8kHz)', (xMin + xMax) / 2, height - 40);
     if (showDbLabels) {
       ctx.textAlign = 'left';
       ctx.fillText(`+${DB_RANGE/2}dB`, 5, 15);
-      ctx.fillText('0dB', 5, height / 2 - 5);
-      ctx.fillText(`-${DB_RANGE/2}dB`, 5, height - 15);
+      ctx.fillText('0dB', 5, height / pixelRatio / 2 - 5);
+      ctx.fillText(`-${DB_RANGE/2}dB`, 5, height / pixelRatio - 15);
     }
-  };
+    
+    // Reset scale transformation
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }, [canvasDimensions, showFrequencyLabels, showDbLabels]);
 
-  const getConsistentFrequencyResponse = useCallback(() => {
-    if (!frequencyResponseData || !canvasRef.current) return;
+  // PERFORMANCE OPTIMIZATION: Curve layer that only updates when needed
+  const drawCurveLayer = useCallback((dims = canvasDimensions) => {
+    if (!curveCanvasRef.current || dims.width === 0) return;
     
-    const canvas = canvasRef.current;
-    const { width, height } = canvas;
-    
-    // Create temporary canvas for smoother transitions
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = width;
-    tempCanvas.height = height;
-    const tempCtx = tempCanvas.getContext('2d');
-    
-    if (!tempCtx) return;
-    
-    // Draw to temp canvas first
-    drawGrid(tempCtx, width, height);
-    
-    if (isSplitEarMode) {
-      drawBandCurve(tempCtx, leftEarBands, LEFT_EAR_COLOR, width, height, !leftEarEnabled);
-      drawBandCurve(tempCtx, rightEarBands, RIGHT_EAR_COLOR, width, height, !rightEarEnabled);
-      drawLegend(tempCtx, width, height);
-    } else {
-      drawBandCurve(tempCtx, unifiedBands, UNIFIED_COLOR, width, height);
-    }
-    
-    // Then copy to main canvas for smoother transition
+    const canvas = curveCanvasRef.current;
     const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.clearRect(0, 0, width, height);
-      ctx.drawImage(tempCanvas, 0, 0);
-      
-      // Draw interactive points last
-      if (interactive) {
-        drawBandPoints(ctx, width, height);
+    if (!ctx) return;
+    
+    const { width, height, pixelRatio } = dims;
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, width, height);
+    
+    // Apply pixel ratio scaling
+    ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+    
+    // If frequency response data is available and valid, use it
+    if (frequencyResponseData && 
+        frequencyResponseData.frequencies.length > 0 && 
+        frequencyResponseData.leftMagnitudes.length > 0) {
+      drawFrequencyResponse(ctx, width / pixelRatio, height / pixelRatio);
+    } else {
+      // Otherwise use approximation from bands
+      if (isSplitEarMode) {
+        drawBandCurve(ctx, leftEarBands, LEFT_EAR_COLOR, width / pixelRatio, height / pixelRatio, !leftEarEnabled);
+        drawBandCurve(ctx, rightEarBands, RIGHT_EAR_COLOR, width / pixelRatio, height / pixelRatio, !rightEarEnabled);
+      } else {
+        drawBandCurve(ctx, unifiedBands, UNIFIED_COLOR, width / pixelRatio, height / pixelRatio);
       }
     }
-  }, [frequencyResponseData, isSplitEarMode, leftEarBands, rightEarBands, unifiedBands, leftEarEnabled, rightEarEnabled]);
+    
+    // Add legend for split mode
+    if (isSplitEarMode) {
+      drawLegend(ctx, width / pixelRatio, height / pixelRatio);
+    }
+    
+    // Reset curve redraw flag
+    setNeedsCurveRedraw(false);
+    
+    // Reset scale transformation
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }, [
+    canvasDimensions, 
+    frequencyResponseData, 
+    isSplitEarMode, 
+    unifiedBands, 
+    leftEarBands, 
+    rightEarBands, 
+    isEQEnabled, 
+    leftEarEnabled, 
+    rightEarEnabled
+  ]);
 
+  // PERFORMANCE OPTIMIZATION: Controls layer that updates frequently during interaction
+  const drawControlsLayer = useCallback((dims = canvasDimensions) => {
+    if (!controlsCanvasRef.current || dims.width === 0) return;
+    
+    const canvas = controlsCanvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    const { width, height, pixelRatio } = dims;
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, width, height);
+    
+    // Apply pixel ratio scaling
+    ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+    
+    // Draw interactive points
+    if (interactive) {
+      drawBandPoints(ctx, width / pixelRatio, height / pixelRatio);
+    }
+    
+    // Reset scale transformation
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }, [
+    canvasDimensions, 
+    interactive, 
+    isSplitEarMode, 
+    unifiedBands, 
+    leftEarBands, 
+    rightEarBands, 
+    draggedPoint, 
+    hoveredPoint, 
+    isAdjustingQ, 
+    selectedBandForQ,
+    isEQEnabled,
+    leftEarEnabled,
+    rightEarEnabled
+  ]);
+
+  // Render when props change
   useEffect(() => {
-    getConsistentFrequencyResponse();
-  }, [getConsistentFrequencyResponse]);
+    // Only proceed if mounted
+    if (!isMounted) return;
+    
+    // Mark that we need to redraw the curve layer
+    setNeedsCurveRedraw(true);
+    
+    if (animationFrameRef.current !== null) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+    
+    // Schedule redraw of all layers
+    animationFrameRef.current = requestAnimationFrame(() => {
+      const now = performance.now();
+      // Don't redraw too frequently (throttle to 30fps)
+      if (now - lastRenderTimeRef.current > 33) {
+        drawBackgroundLayer();
+        drawCurveLayer();
+        drawControlsLayer();
+        lastRenderTimeRef.current = now;
+      }
+    });
+  }, [
+    isMounted,
+    isEQEnabled, 
+    isSplitEarMode, 
+    unifiedBands, 
+    leftEarBands, 
+    rightEarBands, 
+    leftEarEnabled,
+    rightEarEnabled,
+    frequencyResponseData,
+    height
+  ]);
+
+  // Redraw controls when interaction state changes
+  useEffect(() => {
+    // Only proceed if mounted
+    if (!isMounted) return;
+    
+    if (animationFrameRef.current !== null) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+    
+    // Only redraw the controls layer (points and interactions)
+    animationFrameRef.current = requestAnimationFrame(() => {
+      drawControlsLayer();
+    });
+  }, [isMounted, draggedPoint, hoveredPoint, isAdjustingQ, selectedBandForQ]);
 
   /**
    * Draw a curve based on frequency bands
@@ -635,8 +778,6 @@ ctx.fillText('Common Tinnitus Range (3-8kHz)', (xMin + xMax) / 2, height - 40);
     const sharpness = Math.min(Q / 10, 2); // Normalize Q to a reasonable range
     return t ** (1 + sharpness);
   };
-  
-  // Update drawEQCurve function to use the improved curves
 
   /**
    * Draw frequency response from audio engine data
@@ -664,36 +805,14 @@ ctx.fillText('Common Tinnitus Range (3-8kHz)', (xMin + xMax) / 2, height - 40);
     ctx.beginPath();
     
     let firstPointDrawn = false;
+    const channelDisabled = isSplitEarMode && !leftEarEnabled;
     
-    for (let i = 0; i < frequencies.length; i++) {
-      const x = freqToX(frequencies[i], width);
-      
-      // Clamp magnitude to our display range
-      const magnitude = Math.max(Math.min(leftMagnitudes[i], DB_RANGE/2), -DB_RANGE/2);
-      const y = zeroDbY - (magnitude / DB_RANGE) * height;
-      
-      if (!firstPointDrawn) {
-        ctx.moveTo(x, y);
-        firstPointDrawn = true;
-      } else {
-        ctx.lineTo(x, y);
-      }
-    }
-    
-    ctx.stroke();
-    
-    // Draw right channel curve if in split mode
-    if (isSplitEarMode) {
-      ctx.strokeStyle = RIGHT_EAR_COLOR;
-      ctx.beginPath();
-      
-      firstPointDrawn = false;
-      
+    if (!channelDisabled) {
       for (let i = 0; i < frequencies.length; i++) {
         const x = freqToX(frequencies[i], width);
         
         // Clamp magnitude to our display range
-        const magnitude = Math.max(Math.min(rightMagnitudes[i], DB_RANGE/2), -DB_RANGE/2);
+        const magnitude = Math.max(Math.min(leftMagnitudes[i], DB_RANGE/2), -DB_RANGE/2);
         const y = zeroDbY - (magnitude / DB_RANGE) * height;
         
         if (!firstPointDrawn) {
@@ -705,6 +824,34 @@ ctx.fillText('Common Tinnitus Range (3-8kHz)', (xMin + xMax) / 2, height - 40);
       }
       
       ctx.stroke();
+    }
+    
+    // Draw right channel curve if in split mode
+    if (isSplitEarMode) {
+      ctx.strokeStyle = RIGHT_EAR_COLOR;
+      ctx.beginPath();
+      
+      firstPointDrawn = false;
+      const rightChannelDisabled = !rightEarEnabled;
+      
+      if (!rightChannelDisabled) {
+        for (let i = 0; i < frequencies.length; i++) {
+          const x = freqToX(frequencies[i], width);
+          
+          // Clamp magnitude to our display range
+          const magnitude = Math.max(Math.min(rightMagnitudes[i], DB_RANGE/2), -DB_RANGE/2);
+          const y = zeroDbY - (magnitude / DB_RANGE) * height;
+          
+          if (!firstPointDrawn) {
+            ctx.moveTo(x, y);
+            firstPointDrawn = true;
+          } else {
+            ctx.lineTo(x, y);
+          }
+        }
+        
+        ctx.stroke();
+      }
     }
     
     // Reset opacity
@@ -749,7 +896,8 @@ ctx.fillText('Common Tinnitus Range (3-8kHz)', (xMin + xMax) / 2, height - 40);
           !rightEarEnabled // Pass the disabled state
         );
       });
-    } else {      // Draw unified points
+    } else {      
+      // Draw unified points
       unifiedBands.forEach(band => {
         const isHovered = hoveredPoint?.bandId === band.id && 
                           hoveredPoint?.channel === 'unified';
@@ -767,27 +915,28 @@ ctx.fillText('Common Tinnitus Range (3-8kHz)', (xMin + xMax) / 2, height - 40);
   /**
    * Draw a single band point
    */
-const drawBandPoint = (
-  ctx: CanvasRenderingContext2D,
-  band: FrequencyBand,
-  color: string,
-  width: number,
-  height: number,
-  isActive: boolean,
-  channel: 'unified' | 'left' | 'right',
-  isEarDisabled: boolean = false // Add this parameter
-) => {
-  const x = freqToX(band.frequency, width);
-  const y = gainToY(band.gain, height);
-  const radius = isActive ? ACTIVE_POINT_RADIUS : POINT_RADIUS;
-  
-  // If EQ is disabled or this specific ear is disabled, reduce opacity
-  if (!isEQEnabled || isEarDisabled) {
-    ctx.globalAlpha = DISABLED_OPACITY;
-  } else {
-    ctx.globalAlpha = 1.0;
-  }
-      // Draw point
+  const drawBandPoint = (
+    ctx: CanvasRenderingContext2D,
+    band: FrequencyBand,
+    color: string,
+    width: number,
+    height: number,
+    isActive: boolean,
+    channel: 'unified' | 'left' | 'right',
+    isEarDisabled: boolean = false
+  ) => {
+    const x = freqToX(band.frequency, width);
+    const y = gainToY(band.gain, height);
+    const radius = isActive ? ACTIVE_POINT_RADIUS : POINT_RADIUS;
+    
+    // If EQ is disabled or this specific ear is disabled, reduce opacity
+    if (!isEQEnabled || isEarDisabled) {
+      ctx.globalAlpha = DISABLED_OPACITY;
+    } else {
+      ctx.globalAlpha = 1.0;
+    }
+    
+    // Draw point
     ctx.fillStyle = color;
     ctx.beginPath();
     ctx.arc(x, y, radius, 0, Math.PI * 2);
@@ -806,9 +955,8 @@ const drawBandPoint = (
       selectedBandForQ.bandId === band.id && 
       selectedBandForQ.channel === channel) {
       // Draw an outer ring to indicate Q adjustment mode
-      // FIXED: Changed color from yellow to a more visible blue
-      ctx.strokeStyle = '#3b82f6'; // Changed from yellow to a bright blue
-      ctx.lineWidth = 2; // Increased from 1.5 for better visibility
+      ctx.strokeStyle = '#3b82f6'; // Bright blue
+      ctx.lineWidth = 2;
       ctx.beginPath();
       
       // The radius of the ring should vary with Q value to give visual feedback
@@ -816,27 +964,28 @@ const drawBandPoint = (
       ctx.arc(x, y, qIndicatorSize, 0, Math.PI * 2);
       ctx.stroke();
       
-      // Draw a "Q" indicator with value - IMPROVED READABILITY
-      ctx.fillStyle = '#3b82f6'; // Matching blue
-      ctx.font = 'bold 11px sans-serif'; // Slightly larger font
+      // Draw a "Q" indicator with value
+      ctx.fillStyle = '#3b82f6';
+      ctx.font = 'bold 11px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       
       // Add a background for better readability
       const qText = `Q: ${band.Q.toFixed(1)}`;
       const textWidth = ctx.measureText(qText).width;
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'; // Semi-transparent white background
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
       ctx.fillRect(x - textWidth/2 - 4, y - qIndicatorSize - 12, textWidth + 8, 18);
       
       // Draw text on top of background
       ctx.fillStyle = '#3b82f6';
       ctx.fillText(qText, x, y - qIndicatorSize - 5);
     }
+    
     // Reset opacity
     ctx.globalAlpha = 1.0;
     
     // If active, show frequency and gain
-    if (isActive && canvasRef.current) {
+    if (isActive && !isEarDisabled) {
       // Show tooltip with frequency and gain
       const tooltipInfo = isAdjustingQ && 
                         selectedBandForQ && 
@@ -899,18 +1048,22 @@ const drawBandPoint = (
     y: number, 
     customText?: string
   ) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!containerRef.current) return;
     
-    const rect = canvas.getBoundingClientRect();
+    // Get container's position
+    const containerRect = containerRef.current.getBoundingClientRect();
+    
+    // Convert canvas coordinates to screen coordinates
+    const screenX = containerRect.left + (x * containerRect.width / canvasDimensions.width * canvasDimensions.pixelRatio);
+    const screenY = containerRect.top + (y * containerRect.height / canvasDimensions.height * canvasDimensions.pixelRatio);
     
     // Remove any existing tooltips
     document.querySelectorAll('.eq-tooltip').forEach(el => el.remove());
     
     const tooltip = document.createElement('div');
     tooltip.className = 'absolute z-10 bg-black/80 text-white text-xs rounded px-2 py-1 eq-tooltip';
-    tooltip.style.left = `${rect.left + x}px`;
-    tooltip.style.top = `${rect.top + y - 30}px`;
+    tooltip.style.left = `${screenX}px`;
+    tooltip.style.top = `${screenY - 30}px`;
     tooltip.style.transform = 'translateX(-50%)';
     tooltip.textContent = customText || `${frequency.toFixed(0)} Hz: ${gain.toFixed(1)} dB`;
     
@@ -938,7 +1091,7 @@ const drawBandPoint = (
   };
 
   /**
-   * Add a function to toggle Q value adjustment mode
+   * Toggle Q value adjustment mode
    */
   const toggleQAdjustment = (
     bandId: string,
@@ -991,13 +1144,20 @@ const drawBandPoint = (
       selectedBandForQ.channel
     );
     
-    // Request a frequency response update immediately
-    // This is important for visual feedback
-    requestAnimationFrame(() => {
-      // Force redraw
-      drawEQCurve();
+    // Mark that we need to redraw
+    setNeedsCurveRedraw(true);
+    
+    // Force redraw
+    if (animationFrameRef.current !== null) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+    
+    animationFrameRef.current = requestAnimationFrame(() => {
+      drawCurveLayer();
+      drawControlsLayer();
     });
   };
+
   /**
    * Helper function to get the current Q value
    */
@@ -1015,6 +1175,284 @@ const drawBandPoint = (
     return 1.0;
   };
 
+  /**
+   * Handle mouse down on canvas with double-click detection
+   */
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!interactive || !isEQEnabled || !controlsCanvasRef.current) return;
+    
+    // Get container's position
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    
+    // Convert screen coordinates to canvas coordinates
+    const canvasX = (e.clientX - rect.left) * canvasDimensions.width / rect.width / canvasDimensions.pixelRatio;
+    const canvasY = (e.clientY - rect.top) * canvasDimensions.height / rect.height / canvasDimensions.pixelRatio;
+    
+    // Find the closest point
+    const point = findClosestPoint(canvasX, canvasY);
+    if (point) {
+      // Check if this ear is enabled before allowing interaction
+      if ((point.channel === 'left' && !leftEarEnabled) || 
+          (point.channel === 'right' && !rightEarEnabled)) {
+        return; // Block interaction for disabled ears
+      }
+      
+      const now = Date.now();
+      const isDoubleClick = (now - lastClickTime) < 300; // 300ms threshold for double-click
+      setLastClickTime(now);
+      
+      // If double-click, toggle Q adjustment mode
+      if (isDoubleClick) {
+        toggleQAdjustment(point.bandId, point.channel);
+        return;
+      }
+      
+      // Get initial values for the point
+      let initialFreq = 0;
+      let initialGain = 0;
+      
+      if (point.channel === 'unified') {
+        const band = unifiedBands.find(b => b.id === point.bandId);
+        if (band) {
+          initialFreq = band.frequency;
+          initialGain = band.gain;
+        }
+      } else if (point.channel === 'left') {
+        const band = leftEarBands.find(b => b.id === point.bandId);
+        if (band) {
+          initialFreq = band.frequency;
+          initialGain = band.gain;
+        }
+      } else if (point.channel === 'right') {
+        const band = rightEarBands.find(b => b.id === point.bandId);
+        if (band) {
+          initialFreq = band.frequency;
+          initialGain = band.gain;
+        }
+      }
+      
+      // If we're in Q adjustment mode and this is a different band, switch to that band
+      if (isAdjustingQ && selectedBandForQ && 
+          (selectedBandForQ.bandId !== point.bandId || selectedBandForQ.channel !== point.channel)) {
+        toggleQAdjustment(point.bandId, point.channel);
+        return;
+      }
+      
+      // Exit Q adjustment mode if we're dragging a point
+      if (isAdjustingQ) {
+        setIsAdjustingQ(false);
+        setSelectedBandForQ(null);
+      }
+      
+      setDraggedPoint({
+        bandId: point.bandId,
+        channel: point.channel,
+        initialX: canvasX,
+        initialY: canvasY,
+        initialFreq,
+        initialGain,
+        isDraggingX: allowXDragging,
+        isDraggingY: allowYDragging
+      });
+      
+      // Prevent text selection during drag
+      e.preventDefault();
+    } else {
+      // Click outside any point, exit Q adjustment mode
+      setIsAdjustingQ(false);
+      setSelectedBandForQ(null);
+    }
+  };
+
+  /**
+   * Handle mouse move on canvas
+   */
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!interactive || !controlsCanvasRef.current) return;
+    
+    // Get container's position
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    
+    // Convert screen coordinates to canvas coordinates
+    const canvasX = (e.clientX - rect.left) * canvasDimensions.width / rect.width / canvasDimensions.pixelRatio;
+    const canvasY = (e.clientY - rect.top) * canvasDimensions.height / rect.height / canvasDimensions.pixelRatio;
+    
+    if (draggedPoint) {
+      // We're dragging a point
+      
+      // Calculate new values based on drag direction
+      if (!draggedPoint.isDraggingX && !draggedPoint.isDraggingY) {
+        // If neither direction is set yet, determine based on initial movement
+        const deltaX = Math.abs(canvasX - draggedPoint.initialX);
+        const deltaY = Math.abs(canvasY - draggedPoint.initialY);
+        
+        // Set the direction that has more movement
+        if (deltaX > deltaY && allowXDragging) {
+          setDraggedPoint(prev => prev ? { ...prev, isDraggingX: true, isDraggingY: false } : null);
+        } else if (deltaY >= deltaX && allowYDragging) {
+          setDraggedPoint(prev => prev ? { ...prev, isDraggingX: false, isDraggingY: true } : null);
+        }
+        
+        // Return early until direction is determined
+        return;
+      }
+      
+      // Calculate new values based on drag direction
+      let newGain = draggedPoint.initialGain;
+      let newFrequency = draggedPoint.initialFreq;
+      
+      // Update gain (Y position) if Y dragging is enabled
+      if (draggedPoint.isDraggingY && allowYDragging) {
+        newGain = yToGain(canvasY, canvasDimensions.height / canvasDimensions.pixelRatio);
+        
+        // Clamp gain to reasonable range
+        newGain = Math.max(Math.min(newGain, maxGain), minGain);
+        
+        // Call the callback for gain change
+        onBandChange(
+          draggedPoint.bandId,
+          newGain,
+          undefined,
+          draggedPoint.channel
+        );
+        
+        // Mark that the curve needs to be redrawn
+        setNeedsCurveRedraw(true);
+      }
+      
+      // Update frequency (X position) if X dragging is enabled
+      if (draggedPoint.isDraggingX && allowXDragging && onFrequencyChange) {
+        newFrequency = xToFreq(canvasX, canvasDimensions.width / canvasDimensions.pixelRatio);
+        
+        // Clamp frequency to reasonable range
+        newFrequency = Math.max(Math.min(newFrequency, maxFreq), minFreq);
+        
+        // Round frequency to nearest increment
+        newFrequency = roundFrequency(newFrequency);
+        
+        // Call the callback for frequency change
+        onFrequencyChange(
+          draggedPoint.bandId,
+          newFrequency,
+          draggedPoint.channel
+        );
+        
+        // Mark that the curve needs to be redrawn
+        setNeedsCurveRedraw(true);
+      }
+      
+      // Update tooltip to show current values
+      showTooltip(newFrequency, newGain, 
+        freqToX(newFrequency, canvasDimensions.width / canvasDimensions.pixelRatio), 
+        gainToY(newGain, canvasDimensions.height / canvasDimensions.pixelRatio));
+      
+    } else {
+      // Just hovering - find the closest point
+      const point = findClosestPoint(canvasX, canvasY);
+      
+      // Only update hover state if it's different to avoid unnecessary renders
+      if (hoveredPoint?.bandId !== point?.bandId || hoveredPoint?.channel !== point?.channel) {
+        setHoveredPoint(point);
+      }
+    }
+  };
+
+  /**
+   * Handle mouse up event
+   */
+  const handleMouseUp = (e: React.MouseEvent<HTMLDivElement>) => {
+    // If we were dragging a point, check if we should still hover it
+    if (draggedPoint && controlsCanvasRef.current) {
+      // Get container's position
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (rect) {
+        // Convert screen coordinates to canvas coordinates
+        const canvasX = (e.clientX - rect.left) * canvasDimensions.width / rect.width / canvasDimensions.pixelRatio;
+        const canvasY = (e.clientY - rect.top) * canvasDimensions.height / rect.height / canvasDimensions.pixelRatio;
+        
+        // Find if we're still hovering over a point
+        const point = findClosestPoint(canvasX, canvasY);
+        
+        // Update hover state
+        setHoveredPoint(point);
+      }
+    }
+    
+    // Clear drag state
+    setDraggedPoint(null);
+    
+    // Remove any tooltips
+    document.querySelectorAll('.eq-tooltip').forEach(el => el.remove());
+  };
+
+  /**
+   * Handle mouse leave event
+   */
+  const handleMouseLeave = () => {
+    setHoveredPoint(null);
+    
+    // Only release drag if we're not actually dragging
+    // This allows the user to drag outside the canvas
+    if (!draggedPoint) {
+      setDraggedPoint(null);
+    }
+    
+    // Remove any tooltips
+    document.querySelectorAll('.eq-tooltip').forEach(el => el.remove());
+  };
+
+  /**
+   * Find the closest point to the given coordinates
+   */
+  const findClosestPoint = (x: number, y: number): {
+    bandId: string;
+    channel: 'unified' | 'left' | 'right';
+  } | null => {
+    // Maximum distance to consider
+    const maxDistance = 20;
+    let closestDistance = maxDistance;
+    let closestPoint = null;
+    
+    const checkBand = (
+      band: FrequencyBand,
+      channel: 'unified' | 'left' | 'right'
+    ) => {
+      const bandX = freqToX(band.frequency, canvasDimensions.width / canvasDimensions.pixelRatio);
+      const bandY = gainToY(band.gain, canvasDimensions.height / canvasDimensions.pixelRatio);
+      
+      const distance = Math.sqrt(
+        Math.pow(bandX - x, 2) + Math.pow(bandY - y, 2)
+      );
+      
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestPoint = { bandId: band.id, channel };
+      }
+    };
+    
+    if (isSplitEarMode) {
+      // Only check left ear bands if left ear is enabled
+      if (leftEarEnabled) {
+        leftEarBands.forEach(band => checkBand(band, 'left'));
+      }
+      
+      // Only check right ear bands if right ear is enabled
+      if (rightEarEnabled) {
+        rightEarBands.forEach(band => checkBand(band, 'right'));
+      }
+    } else {
+      // Check unified bands
+      unifiedBands.forEach(band => checkBand(band, 'unified'));
+    }
+    
+    return closestPoint;
+  };
+
+  /**
+   * Render Q adjustment UI
+   */
   const renderQAdjustmentUI = () => {
     if (!isAdjustingQ || !selectedBandForQ) return null;
     
@@ -1031,7 +1469,7 @@ const drawBandPoint = (
     };
     
     return (
-      <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 opacity-90 shadow-md p-3">
+      <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 opacity-90 shadow-md p-3 z-10">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center">
             <span className={`px-2 py-0.5 rounded text-xs ${channelColor}`}>
@@ -1101,304 +1539,88 @@ const drawBandPoint = (
     );
   };
 
-  /**
-   * Handle mouse down on canvas with double-click detection
-   */
-  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!interactive || !isEQEnabled || !canvasRef.current) return;
-    
-    const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    
-    // Find the closest point
-    const point = findClosestPoint(x, y);
-    if (point) {
-      // Check if this ear is enabled before allowing interaction
-      if ((point.channel === 'left' && !leftEarEnabled) || 
-          (point.channel === 'right' && !rightEarEnabled)) {
-        return; // Block interaction for disabled ears
-      }
-      
-      const now = Date.now();
-      const isDoubleClick = (now - lastClickTime) < 300; // 300ms threshold for double-click
-      setLastClickTime(now);
-      
-      // If double-click, toggle Q adjustment mode
-      if (isDoubleClick) {
-        toggleQAdjustment(point.bandId, point.channel);
-        return;
-      }
-      
-      // Get initial values for the point
-      let initialFreq = 0;
-      let initialGain = 0;
-      
-      if (point.channel === 'unified') {
-        const band = unifiedBands.find(b => b.id === point.bandId);
-        if (band) {
-          initialFreq = band.frequency;
-          initialGain = band.gain;
-        }
-      } else if (point.channel === 'left') {
-        const band = leftEarBands.find(b => b.id === point.bandId);
-        if (band) {
-          initialFreq = band.frequency;
-          initialGain = band.gain;
-        }
-      } else if (point.channel === 'right') {
-        const band = rightEarBands.find(b => b.id === point.bandId);
-        if (band) {
-          initialFreq = band.frequency;
-          initialGain = band.gain;
-        }
-      }
-      
-      // If we're in Q adjustment mode and this is a different band, switch to that band
-      if (isAdjustingQ && selectedBandForQ && 
-          (selectedBandForQ.bandId !== point.bandId || selectedBandForQ.channel !== point.channel)) {
-        toggleQAdjustment(point.bandId, point.channel);
-        return;
-      }
-      
-      // Exit Q adjustment mode if we're dragging a point
-      if (isAdjustingQ) {
-        setIsAdjustingQ(false);
-        setSelectedBandForQ(null);
-      }
-      
-      setDraggedPoint({
-        bandId: point.bandId,
-        channel: point.channel,
-        initialX: x,
-        initialY: y,
-        initialFreq,
-        initialGain,
-        isDraggingX: allowXDragging,
-        isDraggingY: allowYDragging
-      });
-      
-      // Prevent text selection during drag
-      e.preventDefault();
-    } else {
-      // Click outside any point, exit Q adjustment mode
-      setIsAdjustingQ(false);
-      setSelectedBandForQ(null);
-    }
-  };
-
-  /**
-   * Handle mouse move on canvas
-   */
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!interactive || !canvasRef.current) return;
-    
-    const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    
-    if (draggedPoint) {
-      // We're dragging a point
-      
-      // Calculate new values based on drag direction
-      if (!draggedPoint.isDraggingX && !draggedPoint.isDraggingY) {
-        // If neither direction is set yet, determine based on initial movement
-        const deltaX = Math.abs(x - draggedPoint.initialX);
-        const deltaY = Math.abs(y - draggedPoint.initialY);
-        
-        // Set the direction that has more movement
-        if (deltaX > deltaY && allowXDragging) {
-          setDraggedPoint(prev => prev ? { ...prev, isDraggingX: true, isDraggingY: false } : null);
-        } else if (deltaY >= deltaX && allowYDragging) {
-          setDraggedPoint(prev => prev ? { ...prev, isDraggingX: false, isDraggingY: true } : null);
-        }
-        
-        // Return early until direction is determined
-        return;
-      }
-      
-      // Calculate new values based on drag direction
-      let newGain = draggedPoint.initialGain;
-      let newFrequency = draggedPoint.initialFreq;
-      
-      // Update gain (Y position) if Y dragging is enabled
-      if (draggedPoint.isDraggingY && allowYDragging) {
-        newGain = yToGain(y, canvas.height);
-        
-        // Clamp gain to reasonable range
-        newGain = Math.max(Math.min(newGain, maxGain), minGain);
-        
-        // Call the callback for gain change
-        onBandChange(
-          draggedPoint.bandId,
-          newGain,
-          undefined,
-          draggedPoint.channel
-        );
-      }
-      
-      // Update frequency (X position) if X dragging is enabled
-      if (draggedPoint.isDraggingX && allowXDragging && onFrequencyChange) {
-        newFrequency = xToFreq(x, canvas.width);
-        
-        // Clamp frequency to reasonable range
-        newFrequency = Math.max(Math.min(newFrequency, maxFreq), minFreq);
-        
-        // Round frequency to nearest increment
-        newFrequency = roundFrequency(newFrequency);
-        
-        // Call the callback for frequency change
-        onFrequencyChange(
-          draggedPoint.bandId,
-          newFrequency,
-          draggedPoint.channel
-        );
-      }
-      
-      // Update tooltip to show current values
-      showTooltip(newFrequency, newGain, x, y);
-      
-    } else {
-      // Just hovering - find the closest point
-      const point = findClosestPoint(x, y);
-      setHoveredPoint(point);
-    }
-  };
-
-  /**
-   * Handle mouse up event
-   */
-const handleMouseUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
-  // If we were dragging a point, check if we should still hover it
-  if (draggedPoint && canvasRef.current) {
-    const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    
-    // Find if we're still hovering over a point
-    const point = findClosestPoint(x, y);
-    
-    // Update hover state
-    setHoveredPoint(point);
-  }
-  
-  // Clear drag state
-  setDraggedPoint(null);
-  
-  // Remove any tooltips
-  document.querySelectorAll('.eq-tooltip').forEach(el => el.remove());
-};
-
-  /**
-   * Handle mouse leave event
-   */
-  const handleMouseLeave = () => {
-    setHoveredPoint(null);
-    
-    // Only release drag if we're not actually dragging
-    // This allows the user to drag outside the canvas
-    if (!draggedPoint) {
-      setDraggedPoint(null);
-    }
-    
-    // Remove any tooltips
-    document.querySelectorAll('.eq-tooltip').forEach(el => el.remove());
-  };
-
-  /**
-   * Find the closest point to the given coordinates
-   */
-  const findClosestPoint = (x: number, y: number): {
-    bandId: string;
-    channel: 'unified' | 'left' | 'right';
-  } | null => {
-    if (!canvasRef.current) return null;
-    
-    const canvas = canvasRef.current;
-    const { width, height } = canvas;
-    
-    // Maximum distance to consider
-    const maxDistance = 20;
-    let closestDistance = maxDistance;
-    let closestPoint = null;
-    
-    const checkBand = (
-      band: FrequencyBand,
-      channel: 'unified' | 'left' | 'right'
-    ) => {
-      const bandX = freqToX(band.frequency, width);
-      const bandY = gainToY(band.gain, height);
-      
-      const distance = Math.sqrt(
-        Math.pow(bandX - x, 2) + Math.pow(bandY - y, 2)
-      );
-      
-      if (distance < closestDistance) {
-        closestDistance = distance;
-        closestPoint = { bandId: band.id, channel };
-      }
-    };
-    
-    if (isSplitEarMode) {
-      // Only check left ear bands if left ear is enabled
-      if (leftEarEnabled) {
-        leftEarBands.forEach(band => checkBand(band, 'left'));
-      }
-      
-      // Only check right ear bands if right ear is enabled
-      if (rightEarEnabled) {
-        rightEarBands.forEach(band => checkBand(band, 'right'));
-      }
-    } else {
-      // Check unified bands
-      unifiedBands.forEach(band => checkBand(band, 'unified'));
-    }
-    
-    return closestPoint;
-  };
-
   // Update cursor when hover state changes
   useEffect(() => {
-    if (!canvasRef.current) return;
+    if (!controlsCanvasRef.current) return;
     
     if (hoveredPoint) {
-      canvasRef.current.style.cursor = "pointer";
+      // Check if the hovered point is on a disabled ear
+      if ((hoveredPoint.channel === 'left' && !leftEarEnabled) || 
+          (hoveredPoint.channel === 'right' && !rightEarEnabled)) {
+        controlsCanvasRef.current.style.cursor = "not-allowed";
+      } else {
+        controlsCanvasRef.current.style.cursor = "pointer";
+      }
     } else {
-      canvasRef.current.style.cursor = "default";
+      controlsCanvasRef.current.style.cursor = "default";
     }
-  }, [hoveredPoint]);
+  }, [hoveredPoint, leftEarEnabled, rightEarEnabled]);
 
   // Update cursor when drag state changes
   useEffect(() => {
-    if (!canvasRef.current || !draggedPoint) return;
+    if (!controlsCanvasRef.current || !draggedPoint) return;
     
     if (draggedPoint.isDraggingX && !draggedPoint.isDraggingY) {
-      canvasRef.current.style.cursor = "ew-resize"; // Horizontal resize cursor
+      controlsCanvasRef.current.style.cursor = "ew-resize"; // Horizontal resize cursor
     } else if (!draggedPoint.isDraggingX && draggedPoint.isDraggingY) {
-      canvasRef.current.style.cursor = "ns-resize"; // Vertical resize cursor
+      controlsCanvasRef.current.style.cursor = "ns-resize"; // Vertical resize cursor
     } else if (draggedPoint.isDraggingX && draggedPoint.isDraggingY) {
-      canvasRef.current.style.cursor = "move"; // Move cursor (both directions)
+      controlsCanvasRef.current.style.cursor = "move"; // Move cursor (both directions)
     }
   }, [draggedPoint]);
+
+  // Method to force a refresh of the visualization
+  const refreshVisualization = () => {
+    setNeedsCurveRedraw(true);
+    
+    if (animationFrameRef.current !== null) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+    
+    animationFrameRef.current = requestAnimationFrame(() => {
+      drawBackgroundLayer();
+      drawCurveLayer();
+      drawControlsLayer();
+    });
+  };
 
   return (
     <div 
       ref={containerRef} 
       className="relative w-full h-full border border-gray-200 rounded-md overflow-hidden"
-      style={{ height: window.innerWidth >= 768 ? 'auto' : height }}
+      style={{ height: height }}
+      onMouseDown={handleMouseDown}
+      onMouseMove={throttle(handleMouseMove, 16)}  // Throttle to ~60fps
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseLeave}
     >
-      <div className="p-2 w-full h-full">
+      {/* Add a background placeholder while loading to prevent white flash */}
+      <div className="absolute inset-0 p-2 w-full h-full z-0">
+        <img 
+          src={PLACEHOLDER_IMAGE} 
+          alt="Loading" 
+          className="w-full h-full object-cover opacity-50"
+          style={{ display: isMounted ? 'none' : 'block' }}
+        />
+      </div>
+      
+      <div className="absolute inset-0 p-2 w-full h-full z-10">
+        {/* Layer 1: Static background grid */}
         <canvas
-          ref={canvasRef}
-          style={{ display: "block" }} // Prevent extra space below canvas
-          height={height - 4} // Account for container padding
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseLeave}
+          ref={backgroundCanvasRef}
+          className="absolute top-0 left-0 w-full h-full"
+        />
+        
+        {/* Layer 2: Curves and frequency response */}
+        <canvas
+          ref={curveCanvasRef}
+          className="absolute top-0 left-0 w-full h-full"
+        />
+        
+        {/* Layer 3: Interactive controls */}
+        <canvas
+          ref={controlsCanvasRef}
+          className="absolute top-0 left-0 w-full h-full"
         />
       </div>
       

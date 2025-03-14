@@ -814,21 +814,62 @@ const handleBandChange = (
 
   const handleCalibrationComplete = async (preset: UserPreset) => {
     try {
-      // Always save locally first
-      await saveUserPreset(preset);
+      // Save preset to local storage first, to avoid potential data loss
+      const savedPreset = await saveUserPreset(preset);
       
-      // Apply the preset to unified mode (regardless of current mode)
-      // This ensures calibration always applies to a new unified preset
-      if (isSplitEarMode) {
-        // Temporarily switch to unified mode to apply the calibrated preset
-        setIsSplitEarMode(false);
+      // Ensure audio engine is initialized and ready before applying preset
+      if (!audioEngine || !audioEngine.isEngineInitialized()) {
+        console.log("Audio engine not ready, initializing...");
+        await ensureAudioContextReady();
       }
       
-      // Apply the preset to unified mode
-      handleUnifiedPresetSelect(preset);
+      // Wait a small amount of time to ensure audio context stabilization
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      if (isSplitEarMode) {
+        // Store the current split ear mode state to revert back to it later
+        const wasInSplitMode = true;
+        
+        // Temporarily switch to unified mode to apply the calibrated preset
+        setIsSplitEarMode(false);
+        
+        // Wait for the mode switch to complete
+        await new Promise(resolve => setTimeout(resolve, 50));
+        
+        // Apply the preset to unified mode
+        handleUnifiedPresetSelect(preset);
+        
+        // Wait for the preset to be applied
+        await new Promise(resolve => setTimeout(resolve, 50));
+        
+        // If the user was in split ear mode, revert back
+        if (wasInSplitMode) {
+          // Wait before switching modes again to avoid audio glitches
+          setTimeout(() => {
+            setIsSplitEarMode(true);
+          }, 200);
+        }
+      } else {
+        // Apply the preset to unified mode
+        handleUnifiedPresetSelect(preset);
+      }
+      
+      // Force a refresh of the visualization
+      refreshVisualization();
       
       // Set active tab to "eq" so we see the EQ controls
       setActiveTab('eq');
+      
+      // Sync to cloud if user is logged in
+      if (user) {
+        try {
+          // Ensure preset is also saved to the cloud
+          await saveCloudPreset(preset, user.uid);
+        } catch (cloudError) {
+          console.error('Failed to save preset to cloud, but local save succeeded:', cloudError);
+          // Don't show error toast here as preset is still available locally
+        }
+      }
       
       // Visual feedback - using a more noticeable toast
       toast({
@@ -855,12 +896,15 @@ const handleBandChange = (
       // Add a slight delay before focusing the relevant preset tab
       // This gives time for the UI to update
       setTimeout(() => {
+        // Set active preset tab to "tinnitus" to highlight the newly created preset
+        setActivePresetTab("tinnitus");
+        
         // Find and click the tinnitus tab if it exists
         const tinnitusTab = document.querySelector('[value="tinnitus"]') as HTMLElement;
         if (tinnitusTab) {
           tinnitusTab.click();
         }
-      }, 100);
+      }, 300);
       
     } catch (error) {
       console.error('Failed to save preset locally:', error);
@@ -874,6 +918,7 @@ const handleBandChange = (
       setIsCalibrationOpen(false);
     }
   };
+  
 
   /**
    * Handle preset deletion

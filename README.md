@@ -194,10 +194,10 @@ Our calibration approach combines individualized notched sound therapy with user
 This project was developed by the Hearing Heroes team for the INFO Capstone 2024-2025 at the University of Washington:
 
 - Lewis Going - [@lewisgoing](https://github.com/lewisgoing)
-- [Team Member 2] - [@github_username]
-- [Team Member 3] - [@github_username]
-- [Team Member 4] - [@github_username]
-- [Team Member 5] - [@github_username]
+- [Bella Gatz] - [@bella-gatz](https://github.com/bella-gatz)
+- [Paul Garces] - [@paulgarces](https://github.com/paulgarces)
+- [Nathaniel Sayasack] - [Nathaniel Sayasack](https://www.linkedin.com/in/nathaniel-sayasack-86488821a/)
+- [Brooke Pedersen] - [Brooke Pedersen](https://www.linkedin.com/in/brooke-pedersen-66a9a8227/)
 
 ## License
 

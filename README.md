@@ -1,110 +1,143 @@
-# Harmony Hub
+# Harmony Hub: Personalized Audio for Hearing Accessibility
 
-![Harmony Hub Logo](https://github.com/lewisgoing/INFO-capstone-hearingheroes/raw/main/public/logo.png)
+![Harmony Hub](/public/images/hearingheroes.png)
 
-Harmony Hub is an innovative web application designed to enhance the music listening experience for adults with hearing impairments. By leveraging advanced audio processing technology, it provides personalized sound adjustments and tinnitus relief through customizable equalization settings.
+Harmony Hub is a specialized web application designed to enhance the music listening experience for individuals with hearing impairments, particularly those with tinnitus. By leveraging the Web Audio API and advanced audio processing techniques, the platform offers customizable equalization settings, personalized tinnitus relief, and an accessible audio player interface.
 
-## Table of Contents
+## 🎧 Features
 
-- [Harmony Hub](#harmony-hub)
-  - [Table of Contents](#table-of-contents)
-  - [Overview](#overview)
-  - [Features](#features)
-    - [🎚️ Personalized Equalizer](#️-personalized-equalizer)
-    - [🔊 Tinnitus Calibration](#-tinnitus-calibration)
-    - [👂 Split Ear Mode](#-split-ear-mode)
-    - [💾 Presets Management](#-presets-management)
-    - [☁️ Cloud Sync](#️-cloud-sync)
-    - [🎧 Music Player](#-music-player)
-  - [Live Demo](#live-demo)
-  - [Technology Stack](#technology-stack)
-  - [Installation](#installation)
-    - [Prerequisites](#prerequisites)
-    - [Setup Steps](#setup-steps)
-  - [Usage Guide](#usage-guide)
-    - [Getting Started](#getting-started)
-    - [Tinnitus Calibration](#tinnitus-calibration)
-    - [Split Ear Mode](#split-ear-mode)
-  - [Project Structure](#project-structure)
-  - [Research Background](#research-background)
-  - [Team](#team)
-  - [License](#license)
-  - [Future Development](#future-development)
+### Interactive Equalizer with Real-time Visualization
+- Dynamic frequency response curve that updates in real-time
+- Drag-and-drop control points to adjust specific frequency bands
+- Double-click points to adjust Q-value (width of frequency effect)
+- Support for both visual and numerical feedback
 
-## Overview
+### Tinnitus Calibration & Relief
+- Step-by-step wizard based on clinical research
+- Frequency matching to identify specific tinnitus frequencies
+- Creates personalized "notch filter" presets for tinnitus relief
+- Based on evidence-backed notched sound therapy techniques
 
-Harmony Hub aims to bridge the gap between music enjoyment and hearing impairments by providing tools that allow users to personalize their listening experience. Our application particularly focuses on supporting individuals with tinnitus through evidence-based sound therapy approaches integrated into a music player.
-
-The application leverages haptic feedback technology to translate musical elements into vibrations, enabling users to perceive rhythm, bass, melody, and other sound patterns beyond traditional auditory means.
-
-## Features
-
-### 🎚️ Personalized Equalizer
-- Interactive EQ with frequency band adjustments
-- Double-click points to adjust Q-value (width of frequency adjustments)
-- Visual feedback with real-time frequency response curve
-
-### 🔊 Tinnitus Calibration
-- Step-by-step wizard to identify your exact tinnitus frequency
-- Creates personalized "notch filter" presets based on clinical research
-- Evidence-based approach using notched sound therapy techniques
-
-### 👂 Split Ear Mode
+### Split Ear Mode
 - Configure different EQ settings for each ear
 - Independent preset selection for left and right ears
-- Balance control between channels
+- Separate frequency response visualization for each channel
+- Balance control for asymmetric hearing needs
 
-### 💾 Presets Management
-- Built-in presets designed for common hearing needs
-- Custom user presets for personal configurations
+### Preset Management
+- Built-in presets designed for common hearing profiles
+- Save and manage custom user presets
 - Specialized tinnitus presets created through calibration
+- Cloud sync to access your settings on any device
 
-### ☁️ Cloud Sync
-- Save your settings across devices with cloud sync
-- Automatic synchronization when signed in
-- Offline functionality with local storage
+### User Experience
+- Responsive design that works on desktop and mobile
+- Guide tooltips and onboarding for first-time users
+- Accessibility-focused interface
 
-### 🎧 Music Player
-- Play music with your custom EQ settings
-- Support for direct audio file URLs
-- Seamless integration with EQ adjustments
+## 🛠️ Architecture
 
-## Live Demo
+### Frontend Architecture
 
-Visit our live demo at: [https://hearingheroes.vercel.app/](https://hearingheroes.vercel.app/)
+The application follows a component-based architecture using React with Next.js and TypeScript. Key architectural elements include:
 
-## Technology Stack
+#### Core Audio Processing Engine
 
-- **Frontend:**
-  - Next.js 14
-  - TypeScript
-  - Tailwind CSS
-  - Framer Motion for animations
-  - Web Audio API for audio processing
-  - Shadcn UI components
+At the heart of Harmony Hub is the `AudioEngine` class, which encapsulates all interactions with the Web Audio API:
 
-- **Backend:**
-  - Firebase Authentication
-  - Firestore for cloud storage
-  - Cloud Functions for backend processing
+```typescript
+// Simplified representation of the audio engine architecture
+class AudioEngine {
+  // Audio nodes for processing
+  private nodes: AudioNodes = {
+    context: null,        // AudioContext
+    source: null,         // MediaElementSourceNode
+    filters: [],          // Unified mode filter chain
+    leftFilters: [],      // Left ear filter chain
+    rightFilters: [],     // Right ear filter chain
+    splitter: null,       // ChannelSplitterNode
+    merger: null,         // ChannelMergerNode
+    leftGain: null,       // Left channel gain control
+    rightGain: null       // Right channel gain control
+  };
 
-- **CI/CD:**
-  - Vercel deployment
-  - GitHub Actions
+  // Main methods
+  public async initialize(): Promise<boolean>;
+  public setEQEnabled(enabled: boolean): void;
+  public setSplitEarMode(enabled: boolean): void;
+  public applyUnifiedPreset(preset: Preset): void;
+  public applyLeftEarPreset(preset: Preset): void;
+  public applyRightEarPreset(preset: Preset): void;
+  public getFrequencyResponse(): FrequencyResponseData;
+}
+```
 
-## Installation
+The engine dynamically constructs different audio processing graphs depending on the selected mode:
+
+1. **Unified Mode**: 
+   ```
+   AudioSource → EQ Filters → AudioDestination
+   ```
+
+2. **Split Ear Mode**:
+   ```
+   AudioSource → Splitter → [Left Filters → Left Gain] → Merger → AudioDestination
+                          → [Right Filters → Right Gain] → 
+   ```
+
+#### State Management
+
+The application uses React's Context API and custom hooks to manage state:
+
+- **User Settings**: Managed through `useLocalStorage` hook with Firebase sync
+- **Audio State**: Handled by `useAudioContext` custom hook
+- **Presets Management**: Controlled via `useEQPresets` hook
+
+#### Component Hierarchy
+
+```
+PlayerContainer
+├── AudioEngine
+├── EQVisualization
+├── PlayerControls
+├── EQControls
+├── Presets / SplitEarControls
+├── CalibrationWizard
+└── CloudSyncDialog
+```
+
+### Backend Services
+
+The application uses Firebase for authentication and data storage:
+
+- **Authentication**: Firebase Auth with email and Google sign-in
+- **Database**: Firestore collections for user presets and settings
+- **Storage Rules**: Secure rules to ensure user data isolation
+
+## 🧪 Research Foundation
+
+The tinnitus relief features are based on peer-reviewed research in notched sound therapy:
+
+1. **Notched Sound Therapy**: The calibration wizard creates customized audio filters that reduce energy at the specific frequency of a user's tinnitus. This approach is based on research by Okamoto et al. (2010) showing that "tailor-made notched music reduces tinnitus loudness."
+
+2. **Individualized Approach**: The system creates personalized presets based on precise frequency matching, with control over notch depth and width, following principles established in research by Pantev et al. (2012).
+
+3. **Neuroplasticity Targeting**: The underlying mechanism targets neuroplastic changes in the auditory cortex through consistent exposure to specially-modified audio, potentially providing long-term relief rather than just masking.
+
+## 🚀 Getting Started
 
 ### Prerequisites
+
 - Node.js 18.x or higher
 - npm or yarn
 - Firebase project (for authentication and database features)
 
-### Setup Steps
+### Installation
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/lewisgoing/INFO-capstone-hearingheroes.git
-   cd INFO-capstone-hearingheroes
+   git clone https://github.com/username/harmony-hub.git
+   cd harmony-hub
    ```
 
 2. Install dependencies:
@@ -114,7 +147,7 @@ Visit our live demo at: [https://hearingheroes.vercel.app/](https://hearingheroe
    yarn install
    ```
 
-3. Create a `.env.local` file in the root directory with your Firebase configuration:
+3. Create a `.env.local` file with your Firebase configuration:
    ```
    NEXT_PUBLIC_FIREBASE_API_KEY=your-api-key
    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-project-id.firebaseapp.com
@@ -132,37 +165,55 @@ Visit our live demo at: [https://hearingheroes.vercel.app/](https://hearingheroe
    yarn dev
    ```
 
-5. Open [http://localhost:3000](http://localhost:3000) with your browser to see the application.
+5. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-## Usage Guide
+### Building for Production
 
-### Getting Started
+```bash
+npm run build
+npm run start
+# or
+yarn build
+yarn start
+```
 
-1. **Explore EQ Settings**: Start by adjusting the equalizer points to match your hearing preferences.
-2. **Try Presets**: Test different built-in presets to find a good starting point.
-3. **Calibrate for Tinnitus**: Use the calibration wizard to create a personalized tinnitus relief preset.
-4. **Save Your Settings**: Create an account to save your custom settings to the cloud.
+## 💡 Technical Implementation Details
 
-### Tinnitus Calibration
+### Interactive EQ Visualization
 
-Our calibration process follows these steps:
+The EQ visualization component is built on the HTML Canvas API with optimizations for performance:
 
-1. Identify your tinnitus frequency using test tones
-2. Fine-tune to match your exact frequency
-3. Adjust the notch depth and width
-4. Save your personalized preset
+- **Multi-layered Canvas**: Uses separate canvas layers for background grid, curve rendering, and interactive points to minimize redraws
+- **Frequency Scaling**: Custom logarithmic scaling to better represent audio frequencies as perceived by humans
+- **Optimized Rendering**: Throttling and debouncing techniques to maintain smooth performance during interactions
+- **High-DPI Support**: Pixel ratio adjustments for crisp rendering on high-resolution displays
 
-This approach is based on clinically-validated notched sound therapy research, which has shown promising results for tinnitus management.
+### Web Audio API Integration
 
-### Split Ear Mode
+The audio processing is built entirely on the Web Audio API with several advanced techniques:
 
-If you experience different levels of hearing or tinnitus in each ear:
+- **Dynamic Audio Routing**: Reconfigurable audio graphs to support different modes
+- **Parametric EQ Filters**: BiquadFilter nodes with adjustable frequency, gain, and Q-factor
+- **Real-time Analysis**: Frequency response calculation and visualization
+- **Smooth Transitions**: Parameter automation for click-free changes to audio settings
 
-1. Toggle "Split Ear Mode" in the EQ controls
-2. Adjust settings for left and right ears independently
-3. Use the balance slider to emphasize one ear if needed
+### Tinnitus Calibration Logic
 
-## Project Structure
+The calibration process employs a systematic approach:
+
+1. **Frequency Matching**: Interactive tone generator to identify tinnitus frequency
+2. **Fine-tuning**: Precise adjustments with visual feedback
+3. **Filter Creation**: Automated generation of appropriate notch filters
+4. **Preset Generation**: Storing calibrated settings for future use
+
+### Performance Optimizations
+
+- **Memoized Components**: React.memo and useMemo for expensive calculations
+- **Lazy Loading**: Dynamic imports for non-critical components
+- **Throttled Updates**: Preventing excessive renders during user interactions
+- **Audio Context Management**: Careful handling of AudioContext creation and disposal
+
+## 🌐 Project Structure
 
 ```
 /
@@ -177,45 +228,68 @@ If you experience different levels of hearing or tinnitus in each ear:
 │   ├── firestore.ts      # Firestore database functions
 ├── contexts/             # React context providers
 ├── public/               # Static assets
-├── styles/               # Global styles
 ```
 
-## Research Background
+## 💭 Development Backstory
 
-Harmony Hub's tinnitus relief features are based on peer-reviewed research on notched sound therapy:
+Harmony Hub was developed for our UW Informatics 2025 Capstone Project in response to the growing need for accessible audio solutions, particularly for the millions of people worldwide who experience tinnitus (estimated at 10-15% of adults).
 
-- Okamoto et al. (2010) - "Listening to tailor-made notched music reduces tinnitus loudness"
-- Pantev et al. (2012) - "Transient auditory plasticity in human auditory cortex induced by tailor-made notched music training"
+### Problem Identification
 
-Our calibration approach combines individualized notched sound therapy with user-adjustable parameters, allowing for personalized settings based on the specific characteristics of each person's tinnitus.
+The project began with research into the challenges faced by individuals with hearing impairments when enjoying music:
 
-## Team
+1. **Standard EQs are inadequate**: Most music apps offer basic EQ presets that don't address specific hearing needs
+2. **Tinnitus interference**: Constant ringing or buzzing sounds can significantly detract from music enjoyment
+3. **Asymmetric hearing needs**: Many people experience different hearing levels or tinnitus in each ear
 
-This project was developed by the Hearing Heroes team for the INFO Capstone 2024-2025 at the University of Washington:
+### Design Principles
+
+Several core principles guided the development process:
+
+1. **Evidence-based approach**: Features grounded in peer-reviewed research
+2. **User control**: Providing intuitive tools for personalization rather than black-box solutions
+3. **Progressive enhancement**: Core functionality works without accounts, cloud features enhance experience
+4. **Performance first**: Optimized for real-time audio processing with minimal latency
+5. **Mobile accessibility**: Responsive design that works across devices
+
+### Technical Challenges
+
+Several significant challenges were overcome during development:
+
+1. **Audio API Limitations**: Handling browser-specific differences in Web Audio API implementation
+2. **Split-channel Processing**: Creating an efficient architecture for independent ear processing
+3. **Calibration Accuracy**: Building a user-friendly but precise frequency matching system
+4. **State Synchronization**: Maintaining consistency between audio state and UI components
+
+## 👥 Team
+
+This project was developed by the Hearing Heroes team for INFO Capstone 2024-2025 at the University of Washington:
 
 - Lewis Going - [@lewisgoing](https://github.com/lewisgoing)
-- [Bella Gatz] - [@bella-gatz](https://github.com/bella-gatz)
-- [Paul Garces] - [@paulgarces](https://github.com/paulgarces)
-- [Nathaniel Sayasack] - [Nathaniel Sayasack](https://www.linkedin.com/in/nathaniel-sayasack-86488821a/)
-- [Brooke Pedersen] - [Brooke Pedersen](https://www.linkedin.com/in/brooke-pedersen-66a9a8227/)
+- Bella Gatz - [@bella-gatz](https://github.com/bella-gatz)
+- Paul Garces - [@paulgarces](https://github.com/paulgarces)
+- Nathaniel Sayasack - [LinkedIn](https://www.linkedin.com/in/nathaniel-sayasack-86488821a/)
+- Brooke Pedersen - [LinkedIn](https://www.linkedin.com/in/brooke-pedersen-66a9a8227/)
 
-## License
+## 📝 License
 
-This project is licensed under a proprietary License. See the [LICENSE](LICENSE) file for details.
+This project is proprietary software. See the [LICENSE](LICENSE) file for details.
 
-## Future Development
+## 🔮 Future Development
 
-We're planning several enhancements for future releases:
+We're actively working on several future enhancements:
 
-- **Mobile App**: Native iOS and Android applications
-- **YouTube and SoundCloud Integration**: Support for streaming services
-- **Advanced Calibration Features**: Further refinement of tinnitus matching
-- **Haptic Feedback**: Integration with haptic devices for enhanced sensory experience
-- **Personalized Recommendations**: AI-driven suggestions based on user preferences
+- **Advanced Calibration Algorithm**: More sophisticated tinnitus frequency detection
+- **Machine Learning Integration**: Personalized preset suggestions based on user preferences
+- **External Service Integration**: Support for third party streaming platforms
 - **Community Features**: Sharing and discovering presets created by other users
+
+## 🙏 Acknowledgements
+
+- Research foundation: Prof. Christo Pantev and his team's work on notched sound therapy
+- University of Washington Information School for supporting the Capstone program
+- The shadcn/ui team for the component library
 
 ---
 
-Last Updated: March 17, 2025
-
-*Harmony Hub is a project created by Hearing Heroes for the INFO Capstone 2024-2025 at the University of Washington.*
+For any questions or suggestions, please open an issue or contact us at lgoing7@uw.edu.

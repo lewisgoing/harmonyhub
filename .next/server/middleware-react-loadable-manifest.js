@@ -1,1 +1,1 @@
-self.__REACT_LOADABLE_MANIFEST="{}"
+self.__REACT_LOADABLE_MANIFEST="{\"node_modules/@million/lint/dist/runtime-dev/index.mjs -> react-dom\":{\"id\":\"node_modules/@million/lint/dist/runtime-dev/index.mjs -> react-dom\",\"files\":[]},\"node_modules/@million/lint/dist/runtime-dev/index.mjs -> react-dom/client\":{\"id\":\"node_modules/@million/lint/dist/runtime-dev/index.mjs -> react-dom/client\",\"files\":[]}}"
